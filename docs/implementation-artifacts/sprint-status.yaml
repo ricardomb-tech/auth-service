@@ -1,0 +1,91 @@
+# generated: 2026-07-01
+# last_updated: 2026-07-01
+# project: auth-service
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: docs/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+#
+# ORDEN DE EJECUCIÓN RECOMENDADO:
+# Epic 1 (fundaciones + identidad con credenciales) → Epic 2 (login social) → Epic 3
+# (recuperación + lockout) → Epic 4 (administración + auditoría) → Epic 5 y 6
+# (observabilidad/resiliencia e integración por eventos — dependen hacia atrás de 1/3/4,
+# no se bloquean entre sí, pueden intercalarse una vez Epic 4 esté listo).
+
+generated: 2026-07-01
+last_updated: 2026-07-02
+project: auth-service
+project_key: NOKEY
+tracking_system: file-system
+story_location: docs/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-servicio-ejecutable-con-clean-architecture-y-gate-de-calidad: done
+  1-2-registro-de-cuenta-con-email-de-verificacion: done
+  1-3-verificacion-de-email-y-reenvio: backlog
+  1-4-login-con-credenciales-y-emision-de-tokens: backlog
+  1-5-renovacion-con-rotacion-y-deteccion-de-reuso: backlog
+  1-6-logout: backlog
+  1-7-perfil-propio: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-login-con-google: backlog
+  2-2-login-con-github: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-recuperacion-de-contrasena: backlog
+  3-2-bloqueo-automatico-por-fuerza-bruta: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-aprovisionamiento-del-primer-administrador: backlog
+  4-2-gestion-administrativa-de-cuentas-con-auditoria: backlog
+  4-3-consulta-del-registro-de-auditoria: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-salud-metricas-y-trazas-distribuidas: backlog
+  5-2-resiliencia-ante-proveedores-externos: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-outbox-transaccional-y-primer-evento-publicado: backlog
+  6-2-cobertura-completa-de-eventos-de-cambio-de-estado: backlog
+  epic-6-retrospective: optional

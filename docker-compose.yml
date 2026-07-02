@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${DB_NAME:-auth_service}
+      POSTGRES_USER: ${DB_USER:-auth_service}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-auth_service}
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth-service-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-auth_service} -d ${DB_NAME:-auth_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # UI web
+
+  # Broker Kafka-compatible para el patrón Transactional Outbox (AD-15).
+  # No se consume hasta la Story 6.1 — se levanta desde ya para no tener que
+  # tocar este archivo más adelante (decisión confirmada con el usuario).
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.3.15
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+
+volumes:
+  auth-service-postgres-data:

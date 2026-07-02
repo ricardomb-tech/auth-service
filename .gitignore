@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Environment secrets (AD-10, AD-19) ###
+.env
+
