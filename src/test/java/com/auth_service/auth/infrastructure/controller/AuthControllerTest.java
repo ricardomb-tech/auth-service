@@ -2,6 +2,8 @@ package com.auth_service.auth.infrastructure.controller;
 
 import com.auth_service.auth.application.usecase.RegisterAccountResult;
 import com.auth_service.auth.application.usecase.RegisterAccountUseCase;
+import com.auth_service.auth.application.usecase.ResendVerificationUseCase;
+import com.auth_service.auth.application.usecase.VerifyAccountUseCase;
 import com.auth_service.auth.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +37,12 @@ class AuthControllerTest {
 
     @MockitoBean
     private RegisterAccountUseCase registerAccountUseCase;
+
+    @MockitoBean
+    private VerifyAccountUseCase verifyAccountUseCase;
+
+    @MockitoBean
+    private ResendVerificationUseCase resendVerificationUseCase;
 
     @Test
     void concurrentDuplicateRegistrationStillReturns202() throws Exception {

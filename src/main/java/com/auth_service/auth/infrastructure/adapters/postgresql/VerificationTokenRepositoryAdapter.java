@@ -1,8 +1,13 @@
 package com.auth_service.auth.infrastructure.adapters.postgresql;
 
+import com.auth_service.auth.domain.model.AccountId;
+import com.auth_service.auth.domain.model.VerificationPurpose;
 import com.auth_service.auth.domain.model.VerificationToken;
 import com.auth_service.auth.domain.port.VerificationTokenRepository;
 import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.util.Optional;
 
 @Component
 public class VerificationTokenRepositoryAdapter implements VerificationTokenRepository {
@@ -24,5 +29,25 @@ public class VerificationTokenRepositoryAdapter implements VerificationTokenRepo
                 token.consumedAt());
         jpaRepository.save(entity);
         return token;
+    }
+
+    @Override
+    public Optional<VerificationToken> findByTokenHash(String tokenHash) {
+        return jpaRepository.findByTokenHash(tokenHash).map(this::toDomain);
+    }
+
+    @Override
+    public int invalidateActiveTokens(AccountId accountId, VerificationPurpose purpose, Instant now) {
+        return jpaRepository.invalidateActiveTokens(accountId.value(), purpose.name(), now);
+    }
+
+    private VerificationToken toDomain(VerificationTokenEntity entity) {
+        return VerificationToken.reconstitute(
+                entity.getId(),
+                new AccountId(entity.getAccountId()),
+                entity.getTokenHash(),
+                VerificationPurpose.valueOf(entity.getPurpose()),
+                entity.getExpiresAt(),
+                entity.getConsumedAt());
     }
 }

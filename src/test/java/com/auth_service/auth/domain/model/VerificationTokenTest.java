@@ -56,6 +56,61 @@ class VerificationTokenTest {
     }
 
     @Test
+    void consumeReturnsNewInstanceWithConsumedAtSet() {
+        Clock issuedAt = Clock.fixed(Instant.parse("2026-07-02T00:00:00Z"), ZoneOffset.UTC);
+        Clock consumedAt = Clock.fixed(Instant.parse("2026-07-02T01:00:00Z"), ZoneOffset.UTC);
+        VerificationToken.Issued issued = VerificationToken.issue(
+                AccountId.newId(), VerificationPurpose.EMAIL_VERIFICATION, Duration.ofHours(24), issuedAt);
+
+        VerificationToken consumed = issued.token().consume(consumedAt);
+
+        assertThat(consumed.consumedAt()).isEqualTo(Instant.parse("2026-07-02T01:00:00Z"));
+        assertThat(consumed.id()).isEqualTo(issued.token().id());
+        assertThat(consumed.tokenHash()).isEqualTo(issued.token().tokenHash());
+        assertThat(consumed.accountId()).isEqualTo(issued.token().accountId());
+        assertThat(consumed.purpose()).isEqualTo(issued.token().purpose());
+        assertThat(consumed.expiresAt()).isEqualTo(issued.token().expiresAt());
+        // El objeto original no muta.
+        assertThat(issued.token().consumedAt()).isNull();
+    }
+
+    @Test
+    void consumeRejectsAlreadyConsumedToken() {
+        Clock clock = Clock.fixed(Instant.parse("2026-07-02T00:00:00Z"), ZoneOffset.UTC);
+        VerificationToken.Issued issued = VerificationToken.issue(
+                AccountId.newId(), VerificationPurpose.EMAIL_VERIFICATION, Duration.ofHours(24), clock);
+        VerificationToken alreadyConsumed = issued.token().consume(clock);
+
+        assertThatThrownBy(() -> alreadyConsumed.consume(clock))
+                .isInstanceOf(com.auth_service.auth.domain.exception.DomainValidationException.class)
+                .hasMessageContaining("ya fue utilizado");
+    }
+
+    @Test
+    void consumeRejectsExpiredToken() {
+        Clock issuedAt = Clock.fixed(Instant.parse("2026-07-02T00:00:00Z"), ZoneOffset.UTC);
+        Clock afterExpiry = Clock.fixed(Instant.parse("2026-07-03T00:00:01Z"), ZoneOffset.UTC);
+        VerificationToken.Issued issued = VerificationToken.issue(
+                AccountId.newId(), VerificationPurpose.EMAIL_VERIFICATION, Duration.ofHours(24), issuedAt);
+
+        assertThatThrownBy(() -> issued.token().consume(afterExpiry))
+                .isInstanceOf(com.auth_service.auth.domain.exception.DomainValidationException.class)
+                .hasMessageContaining("expirado");
+    }
+
+    @Test
+    void hashRawTokenIsDeterministicAndMatchesIssuedHash() {
+        Clock clock = Clock.systemUTC();
+        VerificationToken.Issued issued = VerificationToken.issue(
+                AccountId.newId(), VerificationPurpose.EMAIL_VERIFICATION, Duration.ofHours(24), clock);
+
+        String recomputedHash = VerificationToken.hashRawToken(issued.rawToken());
+
+        assertThat(recomputedHash).isEqualTo(issued.token().tokenHash());
+        assertThat(VerificationToken.hashRawToken("same-input")).isEqualTo(VerificationToken.hashRawToken("same-input"));
+    }
+
+    @Test
     void eachIssuanceProducesADifferentRawTokenAndHash() {
         AccountId accountId = AccountId.newId();
         Clock clock = Clock.systemUTC();

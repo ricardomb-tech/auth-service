@@ -1,5 +1,7 @@
 package com.auth_service.auth.domain.model;
 
+import com.auth_service.auth.domain.exception.DomainValidationException;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -39,6 +41,12 @@ public class VerificationToken {
     public record Issued(String rawToken, VerificationToken token) {
     }
 
+    /** Reconstruye un token ya persistido — usado por el adapter de persistencia. */
+    public static VerificationToken reconstitute(UUID id, AccountId accountId, String tokenHash,
+                                                  VerificationPurpose purpose, Instant expiresAt, Instant consumedAt) {
+        return new VerificationToken(id, accountId, tokenHash, purpose, expiresAt, consumedAt);
+    }
+
     public static Issued issue(AccountId accountId, VerificationPurpose purpose, Duration ttl, Clock clock) {
         if (ttl == null || ttl.isZero() || ttl.isNegative()) {
             throw new IllegalArgumentException("ttl debe ser una duración positiva.");
@@ -48,6 +56,28 @@ public class VerificationToken {
         Instant expiresAt = Instant.now(clock).plus(ttl);
         VerificationToken token = new VerificationToken(UUID.randomUUID(), accountId, tokenHash, purpose, expiresAt, null);
         return new Issued(rawToken, token);
+    }
+
+    /**
+     * Devuelve una nueva instancia consumida — este objeto es inmutable, no
+     * se muta a sí mismo. Lanza si ya estaba consumido o si expiró; en
+     * cualquiera de los dos casos la Cuenta asociada no debe activarse
+     * (Story 1.3, AC #2) — el llamador debe fallar antes de tocar `Account`.
+     */
+    public VerificationToken consume(Clock clock) {
+        Instant now = Instant.now(clock);
+        if (consumedAt != null) {
+            throw new DomainValidationException("El token de verificación ya fue utilizado.");
+        }
+        if (now.isAfter(expiresAt)) {
+            throw new DomainValidationException("El token de verificación ha expirado.");
+        }
+        return new VerificationToken(id, accountId, tokenHash, purpose, expiresAt, now);
+    }
+
+    /** Hash SHA-256 de un token crudo — usado para buscar por {@code tokenHash} al verificar. */
+    public static String hashRawToken(String rawToken) {
+        return sha256Hex(rawToken);
     }
 
     private static String generateRawToken() {

@@ -19,3 +19,10 @@ Items surfaced during code review or implementation that are real but out of sco
 - **`sha256Hex`/comparación de hash de token no es de tiempo constante** — no se ejecuta código de búsqueda por hash todavía (`VerificationTokenRepository` solo tiene `save` en esta historia). Revisar cuando la Story 1.3 implemente el lookup de verificación.
 - **`AccountStatus.valueOf(entity.getStatus())` sin protección contra un valor corrupto/desconocido en la fila** — hoy inalcanzable (solo se escribe `PENDING_VERIFICATION`). Revisar cuando existan más transiciones de estado (Story 3.2, bloqueo por fuerza bruta).
 - **`LoggingEmailSender` no sanea el token/email antes de loggear** — riesgo teórico de log injection vía caracteres de control. Es un adapter de desarrollo temporal (ver pregunta abierta 1 del PRD sobre el proveedor SMTP real); se reemplaza cuando llegue el adapter de producción.
+
+## Deferred from: code review of story 1-3-verificacion-de-email-y-reenvio (2026-07-02)
+
+- **Canal lateral de timing en `/auth/resend-verification`** — el camino `NOT_APPLICABLE` responde casi de inmediato; el camino `RESENT` invalida+emite+publica un evento. Misma categoría que el canal de timing ya aceptado en el registro (Story 1.2) — mitigación de tiempo constante requiere diseño propio, no trivial.
+- **Condición de carrera de baja probabilidad entre `verify` y `resend` concurrentes sobre la misma Cuenta/token** — sin lock optimista (`@Version`) en `VerificationTokenEntity`/`AccountEntity`. Requeriría rediseño de concurrencia desproporcionado para el alcance actual; revisar si el volumen de uso real lo justifica.
+- **`VerificationPurpose.valueOf(entity.getPurpose())` sin protección ante un valor corrupto/desconocido en la fila** — misma categoría que `AccountStatus.valueOf(...)` ya deferred en la Story 1.1. Revisar junto con esa Story 3.2 cuando existan más transiciones/valores.
+- **`ResendVerificationResult` no se loggea en ningún punto** — sin esa señal, un ataque de enumeración vía reenvíos masivos no deja rastro observable. Pertenece a la instrumentación de logging estructurado de Epic 5 (Confiabilidad Operacional).

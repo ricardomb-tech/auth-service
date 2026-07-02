@@ -1,5 +1,7 @@
 package com.auth_service.auth.domain.model;
 
+import com.auth_service.auth.domain.exception.DomainValidationException;
+
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
@@ -44,6 +46,18 @@ public class Account {
     public static Account reconstitute(AccountId id, Email email, HashedPassword passwordHash, AccountStatus status,
                                         Set<Role> roles, int failedAttempts, Instant lockedUntil, Instant createdAt) {
         return new Account(id, email, passwordHash, status, new HashSet<>(roles), failedAttempts, lockedUntil, createdAt);
+    }
+
+    /**
+     * Transición PENDING_VERIFICATION → ACTIVE (Story 1.3, FR-2). Quién y
+     * cuándo invocarla es responsabilidad exclusiva de application/usecase
+     * (AD-6, AD-13) — este método solo aplica la transición si es válida.
+     */
+    public void activate() {
+        if (status != AccountStatus.PENDING_VERIFICATION) {
+            throw new DomainValidationException("Solo una Cuenta pendiente de verificación puede activarse.");
+        }
+        this.status = AccountStatus.ACTIVE;
     }
 
     public AccountId id() {

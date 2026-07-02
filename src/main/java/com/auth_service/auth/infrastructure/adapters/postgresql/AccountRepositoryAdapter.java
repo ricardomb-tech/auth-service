@@ -31,6 +31,11 @@ public class AccountRepositoryAdapter implements AccountRepository {
         return jpaRepository.findByEmail(email.value()).map(this::toDomain);
     }
 
+    @Override
+    public Optional<Account> findById(AccountId id) {
+        return jpaRepository.findById(id.value()).map(this::toDomain);
+    }
+
     private AccountEntity toEntity(Account account) {
         return new AccountEntity(
                 account.id().value(),

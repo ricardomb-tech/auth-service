@@ -1,8 +1,13 @@
 package com.auth_service.auth.domain.model;
 
+import com.auth_service.auth.domain.exception.DomainValidationException;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AccountTest {
 
@@ -32,5 +37,24 @@ class AccountTest {
         Account second = Account.register(email, hashed);
 
         assertThat(first.id()).isNotEqualTo(second.id());
+    }
+
+    @Test
+    void activateTransitionsPendingVerificationToActive() {
+        Account account = Account.register(new Email("visitante@example.com"), new HashedPassword("bcrypt-hash"));
+
+        account.activate();
+
+        assertThat(account.status()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    void activateRejectsAccountNotPendingVerification() {
+        Account activeAccount = Account.reconstitute(
+                AccountId.newId(), new Email("visitante@example.com"), new HashedPassword("bcrypt-hash"),
+                AccountStatus.ACTIVE, Set.of(Role.USER), 0, null, Instant.now());
+
+        assertThatThrownBy(activeAccount::activate)
+                .isInstanceOf(DomainValidationException.class);
     }
 }

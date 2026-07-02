@@ -57,7 +57,7 @@ development_status:
   epic-1: in-progress
   1-1-servicio-ejecutable-con-clean-architecture-y-gate-de-calidad: done
   1-2-registro-de-cuenta-con-email-de-verificacion: done
-  1-3-verificacion-de-email-y-reenvio: backlog
+  1-3-verificacion-de-email-y-reenvio: done
   1-4-login-con-credenciales-y-emision-de-tokens: backlog
   1-5-renovacion-con-rotacion-y-deteccion-de-reuso: backlog
   1-6-logout: backlog
