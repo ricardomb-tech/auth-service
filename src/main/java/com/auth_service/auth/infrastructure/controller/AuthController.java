@@ -1,10 +1,23 @@
 package com.auth_service.auth.infrastructure.controller;
 
+import com.auth_service.auth.application.usecase.LoginCommand;
+import com.auth_service.auth.application.usecase.LoginUseCase;
+import com.auth_service.auth.application.usecase.LogoutCommand;
+import com.auth_service.auth.application.usecase.LogoutUseCase;
+import com.auth_service.auth.application.usecase.RefreshCommand;
+import com.auth_service.auth.application.usecase.RefreshTokenUseCase;
 import com.auth_service.auth.application.usecase.RegisterAccountCommand;
 import com.auth_service.auth.application.usecase.RegisterAccountUseCase;
+import com.auth_service.auth.application.usecase.ResendVerificationCommand;
 import com.auth_service.auth.application.usecase.ResendVerificationUseCase;
+import com.auth_service.auth.application.usecase.TokenIssuer;
 import com.auth_service.auth.application.usecase.VerifyAccountUseCase;
+import com.auth_service.auth.application.usecase.VerifyCommand;
+import com.auth_service.auth.infrastructure.controller.dto.LoginRequest;
+import com.auth_service.auth.infrastructure.controller.dto.LoginResponse;
+import com.auth_service.auth.infrastructure.controller.dto.LogoutRequest;
 import com.auth_service.auth.infrastructure.controller.dto.MessageResponse;
+import com.auth_service.auth.infrastructure.controller.dto.RefreshRequest;
 import com.auth_service.auth.infrastructure.controller.dto.RegisterRequest;
 import com.auth_service.auth.infrastructure.controller.dto.ResendVerificationRequest;
 import com.auth_service.auth.infrastructure.controller.dto.VerifyRequest;
@@ -33,13 +46,22 @@ public class AuthController {
     private final RegisterAccountUseCase registerAccountUseCase;
     private final VerifyAccountUseCase verifyAccountUseCase;
     private final ResendVerificationUseCase resendVerificationUseCase;
+    private final LoginUseCase loginUseCase;
+    private final RefreshTokenUseCase refreshTokenUseCase;
+    private final LogoutUseCase logoutUseCase;
 
     public AuthController(RegisterAccountUseCase registerAccountUseCase,
                            VerifyAccountUseCase verifyAccountUseCase,
-                           ResendVerificationUseCase resendVerificationUseCase) {
+                           ResendVerificationUseCase resendVerificationUseCase,
+                           LoginUseCase loginUseCase,
+                           RefreshTokenUseCase refreshTokenUseCase,
+                           LogoutUseCase logoutUseCase) {
         this.registerAccountUseCase = registerAccountUseCase;
         this.verifyAccountUseCase = verifyAccountUseCase;
         this.resendVerificationUseCase = resendVerificationUseCase;
+        this.loginUseCase = loginUseCase;
+        this.refreshTokenUseCase = refreshTokenUseCase;
+        this.logoutUseCase = logoutUseCase;
     }
 
     @PostMapping("/register")
@@ -61,7 +83,7 @@ public class AuthController {
         // A diferencia del registro, aquí el error SÍ es distinguible del éxito
         // (DomainValidationException propaga a GlobalExceptionHandler → 400
         // problem+json) — el usuario ya posee el token, no hay enumeración en juego.
-        verifyAccountUseCase.verify(request.token());
+        verifyAccountUseCase.verify(new VerifyCommand(request.token()));
         return ResponseEntity.ok(VERIFY_RESPONSE);
     }
 
@@ -69,7 +91,36 @@ public class AuthController {
     public ResponseEntity<MessageResponse> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
         // El resultado se ignora deliberadamente — misma respuesta genérica
         // exista o no la Cuenta, y también si ya no aplica (AC #4).
-        resendVerificationUseCase.resend(request.email());
+        resendVerificationUseCase.resend(new ResendVerificationCommand(request.email()));
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(RESEND_VERIFICATION_RESPONSE);
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        // AuthenticationFailedException se deja propagar hacia GlobalExceptionHandler
+        // (401 problem+json genérico) — a diferencia de /register, aquí no hay una
+        // carrera real que capturar.
+        TokenIssuer.IssuedTokens tokens = loginUseCase.login(new LoginCommand(request.email(), request.password()));
+        LoginResponse response = new LoginResponse(
+                tokens.accessToken(), tokens.refreshToken(), "Bearer", tokens.accessTokenExpiresInSeconds());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        // InvalidRefreshTokenException se deja propagar hacia GlobalExceptionHandler
+        // (401 problem+json genérico) — mismo patrón que /login, el controller no captura nada.
+        TokenIssuer.IssuedTokens tokens = refreshTokenUseCase.refresh(new RefreshCommand(request.refreshToken()));
+        LoginResponse response = new LoginResponse(
+                tokens.accessToken(), tokens.refreshToken(), "Bearer", tokens.accessTokenExpiresInSeconds());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest request) {
+        // Idempotente por diseño (AC #4 de la Story 1.6) — el caso de uso nunca
+        // lanza, así que no hay nada que capturar aquí.
+        logoutUseCase.logout(new LogoutCommand(request.refreshToken()));
+        return ResponseEntity.noContent().build();
     }
 }

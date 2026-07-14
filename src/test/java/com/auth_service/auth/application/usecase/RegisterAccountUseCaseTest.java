@@ -34,7 +34,7 @@ class RegisterAccountUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new RegisterAccountUseCase(accountRepository, verificationTokenRepository, passwordHasher,
-                new AuthTokenProperties(Duration.ofHours(24)), eventPublisher, Clock.systemUTC());
+                new AuthTokenProperties(Duration.ofHours(24), Duration.ofDays(7)), eventPublisher, Clock.systemUTC());
     }
 
     @Test

@@ -1,22 +1,37 @@
 package com.auth_service.auth.infrastructure.controller;
 
+import com.auth_service.auth.application.usecase.LoginUseCase;
+import com.auth_service.auth.application.usecase.LogoutCommand;
+import com.auth_service.auth.application.usecase.LogoutUseCase;
+import com.auth_service.auth.application.usecase.RefreshTokenUseCase;
 import com.auth_service.auth.application.usecase.RegisterAccountResult;
 import com.auth_service.auth.application.usecase.RegisterAccountUseCase;
 import com.auth_service.auth.application.usecase.ResendVerificationUseCase;
+import com.auth_service.auth.application.usecase.TokenIssuer;
 import com.auth_service.auth.application.usecase.VerifyAccountUseCase;
+import com.auth_service.auth.config.JwtProperties;
 import com.auth_service.auth.config.SecurityConfig;
+import com.auth_service.auth.domain.exception.AuthenticationFailedException;
+import com.auth_service.auth.domain.exception.InvalidRefreshTokenException;
+import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,7 +44,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code SecurityConfigTest} de la Story 1.1).
  */
 @WebMvcTest(controllers = AuthController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class})
+@EnableConfigurationProperties(JwtProperties.class)
+@TestPropertySource(properties = "auth.jwt.secret-current=test-only-jwt-secret-not-for-production-use-32bytes")
 class AuthControllerTest {
 
     @Autowired
@@ -43,6 +60,15 @@ class AuthControllerTest {
 
     @MockitoBean
     private ResendVerificationUseCase resendVerificationUseCase;
+
+    @MockitoBean
+    private LoginUseCase loginUseCase;
+
+    @MockitoBean
+    private RefreshTokenUseCase refreshTokenUseCase;
+
+    @MockitoBean
+    private LogoutUseCase logoutUseCase;
 
     @Test
     void concurrentDuplicateRegistrationStillReturns202() throws Exception {
@@ -63,5 +89,86 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"visitante@example.com\",\"password\":\"Str0ngPass\"}"))
                 .andExpect(status().isAccepted());
+    }
+
+    @Test
+    void successfulLoginReturns200WithTokens() throws Exception {
+        when(loginUseCase.login(any())).thenReturn(new TokenIssuer.IssuedTokens("access-token", "refresh-token", 900L));
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"titular@example.com\",\"password\":\"Str0ngPass\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("refresh-token"))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresInSeconds").value(900));
+    }
+
+    @Test
+    void loginWithInvalidCredentialsReturns401ProblemJson() throws Exception {
+        when(loginUseCase.login(any())).thenThrow(new AuthenticationFailedException("Cuenta inexistente."));
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"nadie@example.com\",\"password\":\"Str0ngPass\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").exists());
+    }
+
+    @Test
+    void successfulRefreshReturns200WithNewTokens() throws Exception {
+        when(refreshTokenUseCase.refresh(any())).thenReturn(new TokenIssuer.IssuedTokens("new-access-token", "new-refresh-token", 900L));
+
+        mockMvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"some-raw-refresh-token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new-access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("new-refresh-token"))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresInSeconds").value(900));
+    }
+
+    @Test
+    void refreshWithInvalidTokenReturns401ProblemJson() throws Exception {
+        when(refreshTokenUseCase.refresh(any())).thenThrow(new InvalidRefreshTokenException("Refresh token inválido o expirado."));
+
+        mockMvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"some-raw-refresh-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").exists());
+    }
+
+    @Test
+    void refreshWithBlankTokenReturns400() throws Exception {
+        mockMvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void logoutReturns204WithNoBodyAndInvokesUseCase() throws Exception {
+        mockMvc.perform(post("/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"some-raw-refresh-token\"}"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(logoutUseCase).logout(eq(new LogoutCommand("some-raw-refresh-token")));
+    }
+
+    @Test
+    void logoutWithBlankTokenReturns400() throws Exception {
+        mockMvc.perform(post("/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(logoutUseCase, never()).logout(any());
     }
 }

@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -33,13 +34,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * y se persisten con los repositorios reales (no vía {@code POST /auth/register})
  * porque el {@code rawToken} solo existe en memoria en el instante de emisión —
  * bajo {@code @Transactional} el listener AFTER_COMMIT nunca dispara (mismo
- * límite aceptado que en {@code AuthControllerIntegrationTest} de la Story 1.2),
+ * límite aceptado que en {@code AuthRegisterIntegrationTest} de la Story 1.2),
  * así que pasar por el endpoint de registro no daría acceso al token real.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional
+@TestPropertySource(properties = "auth.jwt.secret-current=test-only-jwt-secret-not-for-production-use-32bytes")
 class AuthVerificationIntegrationTest {
 
     @Container

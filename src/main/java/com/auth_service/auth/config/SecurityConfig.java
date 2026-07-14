@@ -1,5 +1,6 @@
 package com.auth_service.auth.config;
 
+import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,13 +13,14 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.io.IOException;
 
 /**
  * Deny-all por defecto (AD-11): toda ruta nace protegida; lo público se lista
- * explícitamente. Las historias que introducen /auth/** y /oauth2/** amplían
- * esta lista de rutas públicas — no se anticipan aquí.
+ * explícitamente. Las historias que introducen /oauth2/** amplían esta lista
+ * de rutas públicas — no se anticipan aquí.
  *
  * <p>Las excepciones de autenticación/autorización se manejan a nivel del
  * filtro de seguridad (no llegan a un {@code @RestControllerAdvice} de
@@ -47,9 +49,11 @@ public class SecurityConfig {
     };
 
     private final ObjectMapper objectMapper;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(ObjectMapper objectMapper) {
+    public SecurityConfig(ObjectMapper objectMapper, JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.objectMapper = objectMapper;
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
@@ -62,7 +66,8 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(authenticationEntryPoint())
-                        .accessDeniedHandler(accessDeniedHandler()));
+                        .accessDeniedHandler(accessDeniedHandler()))
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

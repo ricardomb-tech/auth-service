@@ -39,8 +39,8 @@ public class ResendVerificationUseCase {
     }
 
     @Transactional
-    public ResendVerificationResult resend(String rawEmail) {
-        Email email = new Email(rawEmail);
+    public ResendVerificationResult resend(ResendVerificationCommand command) {
+        Email email = new Email(command.rawEmail());
 
         Optional<Account> maybeAccount = accountRepository.findByEmail(email);
         if (maybeAccount.isEmpty()) {

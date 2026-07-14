@@ -46,7 +46,7 @@ class VerifyAccountUseCaseTest {
         when(verificationTokenRepository.findByTokenHash(issued.token().tokenHash())).thenReturn(Optional.of(issued.token()));
         when(accountRepository.findById(account.id())).thenReturn(Optional.of(account));
 
-        useCase.verify(issued.rawToken());
+        useCase.verify(new VerifyCommand(issued.rawToken()));
 
         assertThat(account.status().name()).isEqualTo("ACTIVE");
         verify(accountRepository).save(account);
@@ -57,7 +57,7 @@ class VerifyAccountUseCaseTest {
     void nonExistentTokenThrowsAndTouchesNoAccount() {
         when(verificationTokenRepository.findByTokenHash(any())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.verify("bogus-raw-token"))
+        assertThatThrownBy(() -> useCase.verify(new VerifyCommand("bogus-raw-token")))
                 .isInstanceOf(DomainValidationException.class);
 
         verify(accountRepository, never()).findById(any());
@@ -71,7 +71,7 @@ class VerifyAccountUseCaseTest {
                 accountId, VerificationPurpose.PASSWORD_RESET, Duration.ofHours(1), clock);
         when(verificationTokenRepository.findByTokenHash(issued.token().tokenHash())).thenReturn(Optional.of(issued.token()));
 
-        assertThatThrownBy(() -> useCase.verify(issued.rawToken()))
+        assertThatThrownBy(() -> useCase.verify(new VerifyCommand(issued.rawToken())))
                 .isInstanceOf(DomainValidationException.class);
 
         verify(accountRepository, never()).findById(any());
@@ -87,7 +87,7 @@ class VerifyAccountUseCaseTest {
         VerificationToken alreadyConsumed = issued.token().consume(clock);
         when(verificationTokenRepository.findByTokenHash(issued.token().tokenHash())).thenReturn(Optional.of(alreadyConsumed));
 
-        assertThatThrownBy(() -> useCase.verify(issued.rawToken()))
+        assertThatThrownBy(() -> useCase.verify(new VerifyCommand(issued.rawToken())))
                 .isInstanceOf(DomainValidationException.class);
 
         verify(accountRepository, never()).findById(any());
@@ -103,7 +103,7 @@ class VerifyAccountUseCaseTest {
         // El caso de uso usa `clock` (2026-07-02T00:00:00Z), muy posterior a la expiración de 1h.
         when(verificationTokenRepository.findByTokenHash(issued.token().tokenHash())).thenReturn(Optional.of(issued.token()));
 
-        assertThatThrownBy(() -> useCase.verify(issued.rawToken()))
+        assertThatThrownBy(() -> useCase.verify(new VerifyCommand(issued.rawToken())))
                 .isInstanceOf(DomainValidationException.class);
 
         verify(accountRepository, never()).findById(any());

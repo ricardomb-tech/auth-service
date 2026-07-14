@@ -39,7 +39,7 @@ class ResendVerificationUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new ResendVerificationUseCase(accountRepository, verificationTokenRepository,
-                new AuthTokenProperties(Duration.ofHours(24)), eventPublisher, clock);
+                new AuthTokenProperties(Duration.ofHours(24), Duration.ofDays(7)), eventPublisher, clock);
     }
 
     @Test
@@ -47,7 +47,7 @@ class ResendVerificationUseCaseTest {
         Account account = Account.register(new Email("visitante@example.com"), new HashedPassword("bcrypt-hash"));
         when(accountRepository.findByEmail(any())).thenReturn(Optional.of(account));
 
-        ResendVerificationResult result = useCase.resend("visitante@example.com");
+        ResendVerificationResult result = useCase.resend(new ResendVerificationCommand("visitante@example.com"));
 
         assertThat(result).isEqualTo(ResendVerificationResult.RESENT);
         verify(verificationTokenRepository).invalidateActiveTokens(
@@ -66,7 +66,7 @@ class ResendVerificationUseCaseTest {
 
         // Email ya normaliza a minúsculas en su constructor (AD-14, patch de la Story 1.2) —
         // esto confirma que ResendVerificationUseCase no necesita normalizar aparte.
-        ResendVerificationResult result = useCase.resend("Visitante@Example.COM");
+        ResendVerificationResult result = useCase.resend(new ResendVerificationCommand("Visitante@Example.COM"));
 
         assertThat(result).isEqualTo(ResendVerificationResult.RESENT);
     }
@@ -75,7 +75,7 @@ class ResendVerificationUseCaseTest {
     void nonExistentAccountReturnsNotApplicableWithoutTouchingTokens() {
         when(accountRepository.findByEmail(any())).thenReturn(Optional.empty());
 
-        ResendVerificationResult result = useCase.resend("nadie@example.com");
+        ResendVerificationResult result = useCase.resend(new ResendVerificationCommand("nadie@example.com"));
 
         assertThat(result).isEqualTo(ResendVerificationResult.NOT_APPLICABLE);
         verify(verificationTokenRepository, never()).invalidateActiveTokens(any(), any(), any());
@@ -91,7 +91,7 @@ class ResendVerificationUseCaseTest {
                 AccountStatus.ACTIVE, Set.of(com.auth_service.auth.domain.model.Role.USER), 0, null, Instant.now());
         when(accountRepository.findByEmail(any())).thenReturn(Optional.of(activeAccount));
 
-        ResendVerificationResult result = useCase.resend("activo@example.com");
+        ResendVerificationResult result = useCase.resend(new ResendVerificationCommand("activo@example.com"));
 
         assertThat(result).isEqualTo(ResendVerificationResult.NOT_APPLICABLE);
         verify(verificationTokenRepository, never()).invalidateActiveTokens(any(), any(), any());

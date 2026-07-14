@@ -33,8 +33,8 @@ public class VerifyAccountUseCase {
     }
 
     @Transactional
-    public void verify(String rawToken) {
-        String tokenHash = VerificationToken.hashRawToken(rawToken);
+    public void verify(VerifyCommand command) {
+        String tokenHash = VerificationToken.hashRawToken(command.rawToken());
 
         VerificationToken token = verificationTokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new DomainValidationException("Token de verificación inválido."));
