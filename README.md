@@ -1,122 +1,274 @@
-# **Auth-Service** 🔐  
+# **Auth-Service** 🔐
+
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.4.4-6DB33F?logo=springboot)
 ![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql)
-![JWT](https://img.shields.io/badge/JWT-0.12.2-000000?logo=jsonwebtokens)
+![JWT](https://img.shields.io/badge/JWT-jjwt_0.13-000000?logo=jsonwebtokens)
+![Flyway](https://img.shields.io/badge/Flyway-migrations-CC0200?logo=flyway)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-*Microservicio de Autenticación con Spring Boot, JWT y OAuth2, para autenticar y autorizar usuarios de forma segura.*  
+*Microservicio de autenticación y autorización construido con Spring Boot 3 y Clean Architecture. Emite y valida JWT, soporta login federado (OAuth2) y expone una API REST protegida por defecto (deny-all).*
 
 ---
 
-## **📌 Tabla de Contenidos**  
-1. [Descripción](#-descripción)  
-2. [Características](#-características)  
-3. [Tecnologías](#-tecnologías)  
-4. [Estructura del Proyecto](#-estructura-del-proyecto)  
-5. [Configuración](#-configuración)  
-6. [Endpoints](#-endpoints)  
-7. [Despliegue](#-despliegue)  
- 
----
+## 📌 Tabla de contenidos
 
-## **📝 Descripción**  
-**Auth-Service** es un microservicio de autenticación seguro y escalable, desarrollado con **Spring Boot 3**, que proporciona:  
-✅ Autenticación basada en **JWT** (JSON Web Tokens)  
-✅ Autorización por roles (**ADMIN**, **USER**)  
-✅ Soporte para **OAuth2** (Google, GitHub)  
-✅ Integración con **PostgreSQL**  
-✅ Protección de endpoints con **Spring Security**  
+1. [Descripción](#-descripción)
+2. [Estado del proyecto](#-estado-del-proyecto)
+3. [Arquitectura](#-arquitectura)
+4. [Tecnologías](#-tecnologías)
+5. [Estructura del proyecto](#-estructura-del-proyecto)
+6. [Puesta en marcha](#-puesta-en-marcha)
+7. [Configuración (variables de entorno)](#-configuración-variables-de-entorno)
+8. [Endpoints de la API](#-endpoints-de-la-api)
+9. [Testing](#-testing)
+10. [Decisiones de diseño relevantes](#-decisiones-de-diseño-relevantes)
+11. [Limitaciones conocidas / trabajo diferido](#-limitaciones-conocidas--trabajo-diferido)
 
 ---
 
-## **✨ Características**  
-- **Registro e Inicio de Sesión** con validación de credenciales  
-- **Generación y Validación de Tokens JWT** con clave secreta configurable  
-- **Gestión de Roles** para control de acceso granular  
-- **Autenticación Social** mediante OAuth2 (Google/GitHub)  
-- **APIs RESTful** documentadas y protegidas  
+## 📝 Descripción
+
+**Auth-Service** centraliza la identidad y el acceso de otros servicios/clientes. Provee:
+
+- Registro de cuentas con verificación de email (anti-enumeración).
+- Login con credenciales (email + password) y emisión de **Access Token (JWT) + Refresh Token**.
+- Renovación de tokens con **rotación** y **detección de reuso** (revoca toda la familia si un refresh token ya usado vuelve a presentarse).
+- Logout idempotente.
+- Consulta del propio perfil (`/api/v1/users/me`).
+- **Login federado con Google (OAuth2)**, con vinculación de identidad federada a la cuenta existente.
+- Todas las rutas son privadas por defecto; lo público se declara explícitamente (deny-all).
 
 ---
 
-## **🛠 Tecnologías**  
-| **Categoría**       | **Tecnologías**                                                                 |
-|----------------------|---------------------------------------------------------------------------------|
-| **Lenguaje**         | Java 21                                                                         |
-| **Framework**        | Spring Boot 3.4.4 (Web, Security, Data JPA, OAuth2 Client)                      |
-| **Autenticación**    | JWT (io.jsonwebtoken), Spring Security, OAuth2                                  |
-| **Base de Datos**    | PostgreSQL                                                                      |
-| **Herramientas**     | Lombok, Maven, Docker                                                           |
+## 🚦 Estado del proyecto
+
+El desarrollo sigue un roadmap por épicas y historias (`docs/implementation-artifacts/`). Estado actual:
+
+| Épica | Descripción | Estado |
+|---|---|---|
+| **Epic 1** | Fundaciones + identidad con credenciales (Clean Architecture, registro, verificación, login, refresh+rotación, logout, perfil propio) | ✅ **Completa** (Stories 1.1 → 1.7) |
+| **Epic 2** | Login social (OAuth2) | 🔄 En progreso — Story 2.1 (Google) en revisión, Story 2.2 (GitHub) pendiente |
+| **Epic 3** | Recuperación de contraseña + bloqueo por fuerza bruta | ⏳ Backlog |
+| **Epic 4** | Administración de cuentas + auditoría | ⏳ Backlog |
+| **Epic 5** | Observabilidad (salud, métricas, trazas) y resiliencia ante proveedores externos | ⏳ Backlog |
+| **Epic 6** | Integración por eventos (outbox transaccional) | ⏳ Backlog |
+
+Detalle historia por historia disponible en [`docs/implementation-artifacts/`](docs/implementation-artifacts/) y el tracking vivo en [`sprint-status.yaml`](docs/implementation-artifacts/sprint-status.yaml).
 
 ---
 
-## **📂 Estructura del Proyecto**  
+## 🏛 Arquitectura
+
+El código sigue **Clean Architecture** con tres capas y dependencias apuntando siempre hacia adentro (verificado con **ArchUnit** en CI):
+
 ```
-├── src/
-│ ├── main/
-│ │ ├── java/com/auth-service/
-│ │ │ ├── config/ # Configuración de seguridad y beans
-│ │ │ ├── domain/ # Lógica de negocio y modelos
-│ │ │ ├── infrastructure/ # Adaptadores (BD, controladores)
-│ │ │ └── AuthApplication.java
-│ │ └── resources/ # application.yml, propiedades
+domain/          → Modelos y reglas de negocio puras (Account, FederatedIdentity, RefreshToken...).
+                   No depende de Spring ni de infraestructura.
+application/     → Casos de uso (LoginUseCase, RefreshTokenUseCase, FederatedLoginUseCase...).
+                   Orquestan domain + ports, sin conocer detalles de infraestructura.
+infrastructure/  → Adaptadores concretos: controladores REST, JPA/PostgreSQL, JWT, email, OAuth2, Kafka.
 ```
 
-## **📌 Capas principales:**  
-- **`config/`**: Configuración de Spring Security, JWT y OAuth2  
-- **`domain/`**: Modelos (User, Role) y servicios de autenticación  
-- **`infrastructure/`**:  
-  - `adapters/postgreSQL/`: Entidades JPA y repositorios  
-  - `controller/`: Endpoints REST  
+Puntos de diseño destacados:
 
+- **Deny-all por defecto**: toda ruta nace protegida; lo público (`/auth/**`, `/oauth2/**`, swagger) se lista explícitamente en `SecurityConfig`.
+- **Stateless**: sin sesiones de servidor; el flujo OAuth2 usa un `AuthorizationRequestRepository` respaldado por cookie en vez de sesión HTTP.
+- **Rotación de secreto JWT sin downtime**: par de secretos activo + anterior (`JWT_SECRET_CURRENT` / `JWT_SECRET_PREVIOUS`).
+- **Rotación de refresh tokens con detección de reuso**: si un refresh token ya usado se vuelve a presentar, se revoca toda su familia de tokens.
+- **Respuestas anti-enumeración**: registro, reenvío de verificación y login devuelven el mismo cuerpo exista o no la cuenta.
+- **Errores uniformes**: `application/problem+json` (RFC 9457) tanto para errores de autenticación (filtro de seguridad) como de dominio/aplicación (`GlobalExceptionHandler`).
+- **Esquema de BD propiedad de Flyway**: Hibernate solo valida (`ddl-auto=validate`), nunca genera DDL.
 
-## **⚙ Configuración**  
+---
 
-### **🔧 Variables de Entorno** (`application.yml`)  
-```application.properties
-# ===============================
-# DATABASE CONFIGURATION (PostgreSQL)
-# ===============================
-spring.datasource.url=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-spring.datasource.username=${DB_USER}
-spring.datasource.password=${DB_PASSWORD}
+## 🛠 Tecnologías
 
-# ===============================
-# JWT CONFIGURATION
-# ===============================
-jwt.secret-key=${JWT_SECRET}
+| Categoría | Tecnologías |
+|---|---|
+| Lenguaje | Java 21 |
+| Framework | Spring Boot 3.4.4 (Web, Security, Data JPA, OAuth2 Client, Validation, Mail, Actuator) |
+| Autenticación | JWT (`jjwt` 0.13), Spring Security, OAuth2 (Google; GitHub en progreso) |
+| Base de datos | PostgreSQL 15 + Flyway (migraciones versionadas) |
+| Mensajería | Spring Kafka / Redpanda (preparado para outbox transaccional de Epic 6) |
+| Email (dev) | MailHog (SMTP + UI de captura) |
+| Observabilidad | Micrometer + OpenTelemetry (trazas), Prometheus (métricas), Actuator |
+| Resiliencia | Resilience4j |
+| Documentación API | springdoc-openapi (Swagger UI) |
+| Testing | JUnit 5, Mockito, Spring Security Test, Testcontainers, ArchUnit, JaCoCo |
+| Build | Maven (`mvnw`) |
 
-# ===============================
-# OAUTH2 CONFIGURATION
-# ===============================
-# Google OAuth2
-spring.security.oauth2.client.registration.google.client-id=${GOOGLE_CLIENT_ID}
-spring.security.oauth2.client.registration.google.client-secret=${GOOGLE_CLIENT_SECRET}
+---
 
-# GitHub OAuth2
-spring.security.oauth2.client.registration.github.client-id=${GITHUB_CLIENT_ID}
-spring.security.oauth2.client.registration.github.client-secret=${GITHUB_CLIENT_SECRET}
+## 📂 Estructura del proyecto
+
 ```
-## **📌 Requisitos**
-Java 21
+src/main/java/com/auth_service/auth/
+├── domain/
+│   ├── model/         # Account, FederatedIdentity, RefreshToken, VerificationToken, Role...
+│   ├── port/           # Interfaces que implementa infrastructure (repos, stores)
+│   ├── exception/      # Excepciones de dominio
+│   └── event/          # Eventos de dominio
+├── application/
+│   └── usecase/        # Un caso de uso por operación de negocio (Register, Login, Refresh,
+│                        # Logout, FederatedLogin, OAuth2Exchange, GetOwnProfile...)
+├── config/              # SecurityConfig, JwtProperties, AuthTokenProperties, OAuth2RedirectProperties
+└── infrastructure/
+    ├── controller/      # AuthController, UserController + DTOs + GlobalExceptionHandler
+    └── adapters/
+        ├── postgresql/  # Entidades JPA + repositorios (adaptan los ports de domain)
+        ├── security/    # JwtAuthenticationFilter, hashing de passwords
+        ├── oauth/        # Handlers de éxito/fallo OAuth2, cookie authorization repository
+        ├── email/        # Envío de correos de verificación
+        └── messaging/    # Publicación de eventos de dominio
 
-PostgreSQL 15+
+src/main/resources/
+├── application.properties        # Config base (perfiles-agnóstica)
+├── application-dev.properties    # Defaults para docker-compose local
+├── application-prod.properties   # Sin defaults — falla rápido si falta una variable
+└── db/migration/                 # Migraciones Flyway (V1...V4)
 
-Maven 3.9+
+docs/
+├── planning-artifacts/    # Brief, PRD, arquitectura, épicas
+└── implementation-artifacts/  # Una historia por archivo + sprint-status.yaml + deferred-work.md
+```
 
-## **🌐 Endpoints**
-Método	Ruta	Descripción	Acceso
-POST	/auth/register	Registro de usuario	Público
-POST	/auth/login	Genera JWT	Público
-GET	/api/users/me	Datos del usuario autenticado	USER/ADMIN
-GET	/oauth2/google	Login con Google	Público
+---
 
-## **🚀 Despliegue**
-1. Con Docker Compose
-bash
-Copy
-docker-compose up --build  # Inicia PostgreSQL + Auth-Service
-2. Localmente
-bash
-Copy
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
+## 🚀 Puesta en marcha
+
+### Requisitos
+
+- Java 21
+- Maven 3.9+ (o usar `./mvnw`)
+- Docker + Docker Compose (para PostgreSQL, MailHog y Redpanda)
+
+### 1. Levantar dependencias
+
+```bash
+docker-compose up -d
+```
+
+Esto levanta:
+- **PostgreSQL 15** (`localhost:5432`)
+- **MailHog** — captura los correos de verificación en dev (UI en `http://localhost:8025`)
+- **Redpanda** (broker compatible con Kafka, preparado para el outbox transaccional de Epic 6; no se consume todavía)
+
+### 2. Configurar variables de entorno
+
+```bash
+cp .env.example .env
+# editar .env con tus valores (ver sección de Configuración)
+```
+
+### 3. Ejecutar el servicio
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+La API queda disponible en `http://localhost:8080`. Swagger UI en `http://localhost:8080/swagger-ui.html`.
+
+---
+
+## ⚙ Configuración (variables de entorno)
+
+Ver [`.env.example`](.env.example) para la lista completa. Resumen por bloque:
+
+```properties
+# Base de datos
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=auth_service
+DB_USER=auth_service
+DB_PASSWORD=auth_service
+
+# JWT — par activo+anterior para rotar el secreto sin downtime
+JWT_SECRET_CURRENT=change-me-to-a-256-bit-random-secret
+JWT_SECRET_PREVIOUS=
+
+# OAuth2 — Google ya implementado (Story 2.1), GitHub en progreso
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+OAUTH2_SUCCESS_REDIRECT_URI=http://localhost:3000/oauth2/success
+OAUTH2_FAILURE_REDIRECT_URI=http://localhost:3000/oauth2/failure
+
+# Administrador inicial (aprovisionamiento, Epic 4)
+AUTH_ADMIN_EMAIL=
+AUTH_ADMIN_PASSWORD=
+
+# Email (dev usa MailHog)
+MAIL_HOST=localhost
+MAIL_PORT=1025
+
+# Eventos de dominio (Redpanda, Epic 6)
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+
+APP_BASE_URL=http://localhost:8080
+```
+
+> ⚠️ Nunca commitear un `.env` con secretos reales. En el perfil `prod` no hay valores por defecto: si falta una variable, el arranque debe fallar.
+
+---
+
+## 🌐 Endpoints de la API
+
+### Autenticación (`/auth`) — público
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/auth/register` | Registra una cuenta y envía email de verificación. Respuesta idéntica exista o no el email (anti-enumeración). |
+| `POST` | `/auth/verify` | Verifica la cuenta con el token recibido por email. |
+| `POST` | `/auth/resend-verification` | Reenvía el email de verificación si aplica. |
+| `POST` | `/auth/login` | Valida credenciales y emite Access Token (JWT, 15 min) + Refresh Token (7 días). |
+| `POST` | `/auth/refresh` | Rota el Refresh Token y emite un nuevo par. Detecta reuso y revoca la familia completa si el token ya fue usado. |
+| `POST` | `/auth/logout` | Revoca el Refresh Token. Idempotente. |
+| `GET` | `/oauth2/authorization/google` | Inicia el flujo de login federado con Google (redirige a Google). |
+| `POST` | `/auth/oauth2/exchange` | Canjea el código de un solo uso emitido tras un login federado exitoso por Access+Refresh Token (evita exponer tokens en la URL de redirect). |
+
+### Usuario (`/api/v1/users`) — requiere Access Token
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/v1/users/me` | Perfil de la cuenta autenticada: id, email, roles, estado, identidades federadas vinculadas, fecha de creación. |
+
+Roles disponibles: `USER`, `ADMIN`. Estados de cuenta: `PENDING_VERIFICATION`, `ACTIVE`, `LOCKED`, `DISABLED`.
+
+Todos los errores (autenticación, autorización o de dominio) se devuelven como `application/problem+json`.
+
+---
+
+## ✅ Testing
+
+```bash
+./mvnw test
+```
+
+Incluye tests unitarios, de integración (`@SpringBootTest` + MockMvc), arquitectura (ArchUnit, verifica el sentido de las dependencias entre capas) y reporte de cobertura (JaCoCo).
+
+> Los tests de integración que usan **Testcontainers** requieren Docker corriendo; sin Docker se saltan automáticamente en vez de fallar.
+
+---
+
+## 📌 Decisiones de diseño relevantes
+
+El detalle completo vive en `docs/planning-artifacts/architecture/`. Algunas decisiones que afectan directamente cómo se consume la API:
+
+- **AD-3 / AD-19** — JWT firmado con HS256, rotación de secreto vía par activo+anterior.
+- **AD-8** — Contrato de error unificado en Problem Details (RFC 9457).
+- **AD-11** — Deny-all: cualquier ruta nueva nace protegida hasta que se declare explícitamente pública.
+- **AD-15** — Eventos de dominio vía patrón Transactional Outbox (Redpanda ya levantado, consumo desde Epic 6).
+
+---
+
+## ⚠ Limitaciones conocidas / trabajo diferido
+
+Este proyecto documenta explícitamente los gaps encontrados en cada revisión de código en [`docs/implementation-artifacts/deferred-work.md`](docs/implementation-artifacts/deferred-work.md), en vez de dejarlos implícitos. Algunos ejemplos vigentes:
+
+- No hay rate limiting ni bloqueo por fuerza bruta todavía en `/auth/login` (llega con Epic 3).
+- Existen canales laterales de timing entre "cuenta no existe" y "cuenta existe" en varios endpoints (mismo cuerpo de respuesta, latencia distinguible); mitigación de costo equivalente pendiente de diseño.
+- El perfil `prod` no valida de forma fail-fast que las variables de entorno requeridas estén presentes con un mensaje claro.
+
+Antes de tocar código en un área, conviene revisar si ya hay un ítem diferido relacionado en ese archivo.
