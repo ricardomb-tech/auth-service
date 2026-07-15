@@ -61,34 +61,42 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
             throws IOException, ServletException {
-        OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
-        String registrationId = oauthToken.getAuthorizedClientRegistrationId();
-        OAuth2User principal = oauthToken.getPrincipal();
-
-        String providerUserId;
-        String email;
-        boolean emailVerified;
-        if (principal instanceof OidcUser oidcUser) {
-            providerUserId = oidcUser.getSubject();
-            email = oidcUser.getEmail();
-            Boolean verified = oidcUser.getEmailVerified();
-            emailVerified = verified != null && verified;
-        } else {
-            // Sin claims OIDC no hay forma de confirmar la verificación del
-            // proveedor -> se trata como no verificado (AC #3, mismo criterio
-            // que FederatedLoginUseCase aplica al claim email_verified).
-            providerUserId = principal.getName();
-            email = principal.getAttribute("email");
-            emailVerified = false;
-        }
-
         try {
+            OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
+            String registrationId = oauthToken.getAuthorizedClientRegistrationId();
+            OAuth2User principal = oauthToken.getPrincipal();
+
+            String providerUserId;
+            String email;
+            boolean emailVerified;
+            if (principal instanceof OidcUser oidcUser) {
+                providerUserId = oidcUser.getSubject();
+                email = oidcUser.getEmail();
+                Boolean verified = oidcUser.getEmailVerified();
+                emailVerified = verified != null && verified;
+            } else {
+                // Sin claims OIDC no hay forma de confirmar la verificación del
+                // proveedor -> se trata como no verificado (AC #3, mismo criterio
+                // que FederatedLoginUseCase aplica al claim email_verified).
+                providerUserId = principal.getName();
+                email = principal.getAttribute("email");
+                emailVerified = false;
+            }
+
             FederatedLoginCommand command = new FederatedLoginCommand(registrationId, providerUserId, email, emailVerified);
             TokenIssuer.IssuedTokens tokens = federatedLoginUseCase.login(command);
             response.sendRedirect(buildSuccessRedirectUri(tokens));
         } catch (FederatedLoginFailedException failure) {
             failureHandler.onAuthenticationFailure(request, response,
                     new AuthenticationServiceException(failure.getMessage(), failure));
+        } catch (RuntimeException unexpectedFailure) {
+            // Este handler corre fuera del dispatcher de Spring MVC — un fallo
+            // no capturado aquí (p. ej. violación de constraint único por
+            // carrera al crear la misma Cuenta/Identidad concurrentemente)
+            // nunca pasaría por GlobalExceptionHandler y escaparía como un 500
+            // crudo, violando AC #3 (error controlado, nunca un 500).
+            failureHandler.onAuthenticationFailure(request, response,
+                    new AuthenticationServiceException("Fallo inesperado en login federado.", unexpectedFailure));
         }
     }
 

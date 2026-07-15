@@ -3,6 +3,7 @@ package com.auth_service.auth.application.usecase;
 import com.auth_service.auth.domain.exception.DomainValidationException;
 import com.auth_service.auth.domain.exception.FederatedLoginFailedException;
 import com.auth_service.auth.domain.model.Account;
+import com.auth_service.auth.domain.model.AccountStatus;
 import com.auth_service.auth.domain.model.Email;
 import com.auth_service.auth.domain.model.FederatedIdentity;
 import com.auth_service.auth.domain.model.FederatedProvider;
@@ -77,6 +78,13 @@ public class FederatedLoginUseCase {
             }
             FederatedIdentity identity = FederatedIdentity.link(account.id(), provider, command.providerUserId(), clock);
             federatedIdentityRepository.save(identity);
+        }
+
+        // Sin este chequeo, una Cuenta LOCKED (bloqueada por fuerza bruta) o
+        // DISABLED podría autenticarse igualmente vía Google, saltándose por
+        // completo el lockout/disable que LoginUseCase ya hace cumplir.
+        if (account.status() != AccountStatus.ACTIVE) {
+            throw new FederatedLoginFailedException("La Cuenta no está disponible para autenticarse.");
         }
 
         return tokenIssuer.issue(account);

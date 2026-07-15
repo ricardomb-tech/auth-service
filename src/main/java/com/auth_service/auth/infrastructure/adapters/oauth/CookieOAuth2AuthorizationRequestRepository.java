@@ -103,13 +103,16 @@ public class CookieOAuth2AuthorizationRequestRepository implements Authorization
     }
 
     private OAuth2AuthorizationRequest deserialize(Cookie cookie) {
-        byte[] bytes = Base64.getUrlDecoder().decode(cookie.getValue());
-        try (ObjectInputStream in = new AllowListObjectInputStream(new ByteArrayInputStream(bytes))) {
-            return (OAuth2AuthorizationRequest) in.readObject();
-        } catch (IOException | ClassNotFoundException malformedOrRejected) {
-            // Cookie corrupta, manipulada, o con una clase fuera de la
-            // allow-list — tratarla como ausente en vez de propagar (el
-            // caller de Spring Security simplemente reinicia el flujo).
+        try {
+            byte[] bytes = Base64.getUrlDecoder().decode(cookie.getValue());
+            try (ObjectInputStream in = new AllowListObjectInputStream(new ByteArrayInputStream(bytes))) {
+                return (OAuth2AuthorizationRequest) in.readObject();
+            }
+        } catch (IOException | ClassNotFoundException | IllegalArgumentException | ClassCastException malformedOrRejected) {
+            // Cookie corrupta, manipulada (Base64 inválido), con una clase
+            // fuera de la allow-list, o deserializada a un tipo inesperado —
+            // tratarla como ausente en vez de propagar (el caller de Spring
+            // Security simplemente reinicia el flujo en vez de recibir un 500).
             return null;
         }
     }
@@ -122,10 +125,31 @@ public class CookieOAuth2AuthorizationRequestRepository implements Authorization
 
         @Override
         protected Class<?> resolveClass(ObjectStreamClass desc) throws IOException, ClassNotFoundException {
-            if (!ALLOWED_CLASSES.contains(desc.getName()) && !desc.getName().startsWith("[")) {
-                throw new InvalidClassException("Clase no permitida en la deserialización del cookie OAuth2: " + desc.getName());
+            String name = desc.getName();
+            // Un nombre de array (p. ej. "[Lcom.evil.Gadget;") pasaba la
+            // comprobación con solo el prefijo "[", sin validar el tipo de
+            // componente contra la allow-list — reduciendo la protección
+            // real de la lista blanca frente a cadenas de gadgets (CWE-502).
+            if (name.startsWith("[") && !isAllowedArray(name)) {
+                throw new InvalidClassException("Clase no permitida en la deserialización del cookie OAuth2: " + name);
+            }
+            if (!name.startsWith("[") && !ALLOWED_CLASSES.contains(name)) {
+                throw new InvalidClassException("Clase no permitida en la deserialización del cookie OAuth2: " + name);
             }
             return super.resolveClass(desc);
+        }
+
+        private boolean isAllowedArray(String arrayClassName) {
+            String stripped = arrayClassName.replaceFirst("^\\[+", "");
+            if (stripped.length() == 1) {
+                // Array de tipo primitivo (p. ej. "[B" para byte[]) — inofensivo,
+                // no instancia clases del classpath.
+                return true;
+            }
+            if (stripped.startsWith("L") && stripped.endsWith(";")) {
+                return ALLOWED_CLASSES.contains(stripped.substring(1, stripped.length() - 1));
+            }
+            return false;
         }
     }
 }

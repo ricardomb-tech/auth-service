@@ -47,7 +47,7 @@
 # no se bloquean entre sí, pueden intercalarse una vez Epic 4 esté listo).
 
 generated: 2026-07-01
-last_updated: 2026-07-13 # 2-1-login-con-google → review (dev-story)
+last_updated: 2026-07-15 # 2-1-login-con-google → done (code review findings cerrados)
 project: auth-service
 project_key: NOKEY
 tracking_system: file-system
@@ -65,7 +65,7 @@ development_status:
   epic-1-retrospective: optional
 
   epic-2: in-progress
-  2-1-login-con-google: review
+  2-1-login-con-google: done
   2-2-login-con-github: backlog
   epic-2-retrospective: optional
 

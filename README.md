@@ -48,7 +48,7 @@ El desarrollo sigue un roadmap por épicas y historias (`docs/implementation-art
 | Épica | Descripción | Estado |
 |---|---|---|
 | **Epic 1** | Fundaciones + identidad con credenciales (Clean Architecture, registro, verificación, login, refresh+rotación, logout, perfil propio) | ✅ **Completa** (Stories 1.1 → 1.7) |
-| **Epic 2** | Login social (OAuth2) | 🔄 En progreso — Story 2.1 (Google) en revisión, Story 2.2 (GitHub) pendiente |
+| **Epic 2** | Login social (OAuth2) | 🔄 En progreso — Story 2.1 (Google) ✅ completa, Story 2.2 (GitHub) pendiente |
 | **Epic 3** | Recuperación de contraseña + bloqueo por fuerza bruta | ⏳ Backlog |
 | **Epic 4** | Administración de cuentas + auditoría | ⏳ Backlog |
 | **Epic 5** | Observabilidad (salud, métricas, trazas) y resiliencia ante proveedores externos | ⏳ Backlog |
