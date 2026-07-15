@@ -4,6 +4,8 @@ import com.auth_service.auth.application.usecase.LoginCommand;
 import com.auth_service.auth.application.usecase.LoginUseCase;
 import com.auth_service.auth.application.usecase.LogoutCommand;
 import com.auth_service.auth.application.usecase.LogoutUseCase;
+import com.auth_service.auth.application.usecase.OAuth2ExchangeCommand;
+import com.auth_service.auth.application.usecase.OAuth2ExchangeUseCase;
 import com.auth_service.auth.application.usecase.RefreshCommand;
 import com.auth_service.auth.application.usecase.RefreshTokenUseCase;
 import com.auth_service.auth.application.usecase.RegisterAccountCommand;
@@ -17,6 +19,7 @@ import com.auth_service.auth.infrastructure.controller.dto.LoginRequest;
 import com.auth_service.auth.infrastructure.controller.dto.LoginResponse;
 import com.auth_service.auth.infrastructure.controller.dto.LogoutRequest;
 import com.auth_service.auth.infrastructure.controller.dto.MessageResponse;
+import com.auth_service.auth.infrastructure.controller.dto.OAuth2ExchangeRequest;
 import com.auth_service.auth.infrastructure.controller.dto.RefreshRequest;
 import com.auth_service.auth.infrastructure.controller.dto.RegisterRequest;
 import com.auth_service.auth.infrastructure.controller.dto.ResendVerificationRequest;
@@ -49,19 +52,22 @@ public class AuthController {
     private final LoginUseCase loginUseCase;
     private final RefreshTokenUseCase refreshTokenUseCase;
     private final LogoutUseCase logoutUseCase;
+    private final OAuth2ExchangeUseCase oAuth2ExchangeUseCase;
 
     public AuthController(RegisterAccountUseCase registerAccountUseCase,
                            VerifyAccountUseCase verifyAccountUseCase,
                            ResendVerificationUseCase resendVerificationUseCase,
                            LoginUseCase loginUseCase,
                            RefreshTokenUseCase refreshTokenUseCase,
-                           LogoutUseCase logoutUseCase) {
+                           LogoutUseCase logoutUseCase,
+                           OAuth2ExchangeUseCase oAuth2ExchangeUseCase) {
         this.registerAccountUseCase = registerAccountUseCase;
         this.verifyAccountUseCase = verifyAccountUseCase;
         this.resendVerificationUseCase = resendVerificationUseCase;
         this.loginUseCase = loginUseCase;
         this.refreshTokenUseCase = refreshTokenUseCase;
         this.logoutUseCase = logoutUseCase;
+        this.oAuth2ExchangeUseCase = oAuth2ExchangeUseCase;
     }
 
     @PostMapping("/register")
@@ -122,5 +128,18 @@ public class AuthController {
         // lanza, así que no hay nada que capturar aquí.
         logoutUseCase.logout(new LogoutCommand(request.refreshToken()));
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/oauth2/exchange")
+    public ResponseEntity<LoginResponse> exchangeOAuth2Code(@Valid @RequestBody OAuth2ExchangeRequest request) {
+        // Canjea el código de un solo uso emitido por OAuth2AuthenticationSuccessHandler
+        // tras un login federado (Story 2.1, revisión de seguridad) — evita que
+        // Access+Refresh Token viajen en la URL de la redirección de éxito.
+        // OAuth2ExchangeFailedException se deja propagar hacia GlobalExceptionHandler
+        // (401 problem+json genérico), mismo patrón que /login y /refresh.
+        TokenIssuer.IssuedTokens tokens = oAuth2ExchangeUseCase.exchange(new OAuth2ExchangeCommand(request.code()));
+        LoginResponse response = new LoginResponse(
+                tokens.accessToken(), tokens.refreshToken(), "Bearer", tokens.accessTokenExpiresInSeconds());
+        return ResponseEntity.ok(response);
     }
 }

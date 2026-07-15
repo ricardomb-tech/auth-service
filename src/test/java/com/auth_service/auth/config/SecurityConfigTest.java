@@ -1,5 +1,8 @@
 package com.auth_service.auth.config;
 
+import com.auth_service.auth.infrastructure.adapters.oauth.CookieOAuth2AuthorizationRequestRepository;
+import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationFailureHandler;
+import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationSuccessHandler;
 import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -10,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import javax.crypto.SecretKey;
@@ -45,13 +49,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = NoOpTestController.class)
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class})
 @EnableConfigurationProperties(JwtProperties.class)
-@TestPropertySource(properties = "auth.jwt.secret-current=test-only-jwt-secret-not-for-production-use-32bytes")
+@TestPropertySource(properties = {
+        "auth.jwt.secret-current=test-only-jwt-secret-not-for-production-use-32bytes",
+        // oauth2Login() exige un ClientRegistrationRepository en el contexto
+        // para construir la SecurityFilterChain — valores ficticios, este
+        // test nunca llama a Google de verdad.
+        "spring.security.oauth2.client.registration.google.client-id=test-client-id",
+        "spring.security.oauth2.client.registration.google.client-secret=test-client-secret",
+        "spring.security.oauth2.client.registration.google.scope=openid,email,profile"
+})
 class SecurityConfigTest {
 
     private static final String SECRET = "test-only-jwt-secret-not-for-production-use-32bytes";
 
     @Autowired
     private MockMvc mockMvc;
+
+    // Story 2.1: SecurityConfig ahora depende de estos colaboradores de OAuth2
+    // (cadena completa hasta FederatedLoginUseCase/AccountRepository) — este
+    // slice test solo verifica el deny-all, no el flujo OAuth2 en sí, así que
+    // se mockean para no arrastrar dependencias irrelevantes a este test.
+    @MockitoBean
+    private CookieOAuth2AuthorizationRequestRepository cookieOAuth2AuthorizationRequestRepository;
+
+    @MockitoBean
+    private OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+
+    @MockitoBean
+    private OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
 
     @Test
     void unauthenticatedRequestToNonPublicRouteReturns401ProblemJson() throws Exception {
@@ -72,6 +97,23 @@ class SecurityConfigTest {
     @Test
     void swaggerUiPathIsNotBlockedBySecurityFilter() throws Exception {
         mockMvc.perform(get("/swagger-ui/index.html"))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    org.assertj.core.api.Assertions.assertThat(status).isNotIn(401, 403);
+                });
+    }
+
+    /**
+     * Verifica únicamente que el filtro de seguridad no bloquea la ruta de
+     * inicio del flujo OAuth2 (Story 2.1) — no que la redirección a Google
+     * ocurra correctamente (eso requiere la configuración completa del
+     * {@code ClientRegistrationRepository}, cubierto por el test de
+     * integración de la Story 2.1). Lo único que este test no debe tolerar
+     * es 401/403, que indicarían que `/oauth2/**` dejó de ser público.
+     */
+    @Test
+    void oauth2AuthorizationPathIsNotBlockedBySecurityFilter() throws Exception {
+        mockMvc.perform(get("/oauth2/authorization/google"))
                 .andExpect(result -> {
                     int status = result.getResponse().getStatus();
                     org.assertj.core.api.Assertions.assertThat(status).isNotIn(401, 403);

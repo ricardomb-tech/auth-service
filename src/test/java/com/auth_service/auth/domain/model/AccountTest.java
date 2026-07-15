@@ -57,4 +57,30 @@ class AccountTest {
         assertThatThrownBy(activeAccount::activate)
                 .isInstanceOf(DomainValidationException.class);
     }
+
+    @Test
+    void registerFederatedCreatesActiveAccountWithUserRoleAndNoPasswordHash() {
+        Email email = new Email("federado@example.com");
+
+        Account account = Account.registerFederated(email);
+
+        assertThat(account.id()).isNotNull();
+        assertThat(account.email()).isEqualTo(email);
+        assertThat(account.passwordHash()).isNull();
+        assertThat(account.status()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(account.roles()).containsExactly(Role.USER);
+        assertThat(account.failedAttempts()).isZero();
+        assertThat(account.lockedUntil()).isNull();
+        assertThat(account.createdAt()).isNotNull();
+    }
+
+    @Test
+    void eachFederatedRegistrationGetsAUniqueId() {
+        Email email = new Email("federado@example.com");
+
+        Account first = Account.registerFederated(email);
+        Account second = Account.registerFederated(email);
+
+        assertThat(first.id()).isNotEqualTo(second.id());
+    }
 }

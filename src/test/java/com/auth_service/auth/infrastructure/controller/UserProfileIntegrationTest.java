@@ -4,10 +4,13 @@ import com.auth_service.auth.domain.model.Account;
 import com.auth_service.auth.domain.model.AccountId;
 import com.auth_service.auth.domain.model.AccountStatus;
 import com.auth_service.auth.domain.model.Email;
+import com.auth_service.auth.domain.model.FederatedIdentity;
+import com.auth_service.auth.domain.model.FederatedProvider;
 import com.auth_service.auth.domain.model.HashedPassword;
 import com.auth_service.auth.domain.model.RawPassword;
 import com.auth_service.auth.domain.model.Role;
 import com.auth_service.auth.domain.port.AccountRepository;
+import com.auth_service.auth.domain.port.FederatedIdentityRepository;
 import com.auth_service.auth.domain.port.PasswordHasher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -63,6 +66,9 @@ class UserProfileIntegrationTest {
     @Autowired
     private PasswordHasher passwordHasher;
 
+    @Autowired
+    private FederatedIdentityRepository federatedIdentityRepository;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private AccountId persistActiveAccount(String email) {
@@ -95,6 +101,18 @@ class UserProfileIntegrationTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.federatedIdentities").isEmpty())
                 .andExpect(jsonPath("$.createdAt").isNotEmpty());
+    }
+
+    @Test
+    void accountWithLinkedGoogleIdentityReturnsItInFederatedIdentities() throws Exception {
+        AccountId accountId = persistActiveAccount("conidentidad@example.com");
+        federatedIdentityRepository.save(FederatedIdentity.link(accountId, FederatedProvider.GOOGLE, "google-sub-1",
+                java.time.Clock.systemUTC()));
+        String accessToken = loginAndGetAccessToken("conidentidad@example.com");
+
+        mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.federatedIdentities", containsInAnyOrder("google")));
     }
 
     @Test

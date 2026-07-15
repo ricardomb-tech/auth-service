@@ -3,6 +3,8 @@ package com.auth_service.auth.infrastructure.controller;
 import com.auth_service.auth.application.usecase.LoginUseCase;
 import com.auth_service.auth.application.usecase.LogoutCommand;
 import com.auth_service.auth.application.usecase.LogoutUseCase;
+import com.auth_service.auth.application.usecase.OAuth2ExchangeCommand;
+import com.auth_service.auth.application.usecase.OAuth2ExchangeUseCase;
 import com.auth_service.auth.application.usecase.RefreshTokenUseCase;
 import com.auth_service.auth.application.usecase.RegisterAccountResult;
 import com.auth_service.auth.application.usecase.RegisterAccountUseCase;
@@ -13,6 +15,10 @@ import com.auth_service.auth.config.JwtProperties;
 import com.auth_service.auth.config.SecurityConfig;
 import com.auth_service.auth.domain.exception.AuthenticationFailedException;
 import com.auth_service.auth.domain.exception.InvalidRefreshTokenException;
+import com.auth_service.auth.domain.exception.OAuth2ExchangeFailedException;
+import com.auth_service.auth.infrastructure.adapters.oauth.CookieOAuth2AuthorizationRequestRepository;
+import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationFailureHandler;
+import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationSuccessHandler;
 import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,11 +52,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = AuthController.class)
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class})
 @EnableConfigurationProperties(JwtProperties.class)
-@TestPropertySource(properties = "auth.jwt.secret-current=test-only-jwt-secret-not-for-production-use-32bytes")
+@TestPropertySource(properties = {
+        "auth.jwt.secret-current=test-only-jwt-secret-not-for-production-use-32bytes",
+        "spring.security.oauth2.client.registration.google.client-id=test-client-id",
+        "spring.security.oauth2.client.registration.google.client-secret=test-client-secret",
+        "spring.security.oauth2.client.registration.google.scope=openid,email,profile"
+})
 class AuthControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // Story 2.1: SecurityConfig ahora depende de estos colaboradores de
+    // OAuth2 — mockeados aquí para no arrastrar FederatedLoginUseCase, ajeno
+    // a lo que este slice test verifica (los endpoints de AuthController).
+    @MockitoBean
+    private CookieOAuth2AuthorizationRequestRepository cookieOAuth2AuthorizationRequestRepository;
+
+    @MockitoBean
+    private OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+
+    @MockitoBean
+    private OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
 
     @MockitoBean
     private RegisterAccountUseCase registerAccountUseCase;
@@ -69,6 +92,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private LogoutUseCase logoutUseCase;
+
+    @MockitoBean
+    private OAuth2ExchangeUseCase oAuth2ExchangeUseCase;
 
     @Test
     void concurrentDuplicateRegistrationStillReturns202() throws Exception {
@@ -170,5 +196,43 @@ class AuthControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(logoutUseCase, never()).logout(any());
+    }
+
+    @Test
+    void successfulOAuth2ExchangeReturns200WithTokens() throws Exception {
+        when(oAuth2ExchangeUseCase.exchange(eq(new OAuth2ExchangeCommand("some-exchange-code"))))
+                .thenReturn(new TokenIssuer.IssuedTokens("access-token", "refresh-token", 900L));
+
+        mockMvc.perform(post("/auth/oauth2/exchange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"some-exchange-code\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("refresh-token"))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresInSeconds").value(900));
+    }
+
+    @Test
+    void oAuth2ExchangeWithInvalidCodeReturns401ProblemJson() throws Exception {
+        when(oAuth2ExchangeUseCase.exchange(any()))
+                .thenThrow(new OAuth2ExchangeFailedException("Código de intercambio inválido, ya usado o expirado."));
+
+        mockMvc.perform(post("/auth/oauth2/exchange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"un-codigo-invalido\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").exists());
+    }
+
+    @Test
+    void oAuth2ExchangeWithBlankCodeReturns400() throws Exception {
+        mockMvc.perform(post("/auth/oauth2/exchange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(oAuth2ExchangeUseCase, never()).exchange(any());
     }
 }

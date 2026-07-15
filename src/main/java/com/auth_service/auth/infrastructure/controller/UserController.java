@@ -4,6 +4,7 @@ import com.auth_service.auth.application.usecase.GetOwnProfileCommand;
 import com.auth_service.auth.application.usecase.GetOwnProfileUseCase;
 import com.auth_service.auth.domain.exception.AccountNotFoundException;
 import com.auth_service.auth.domain.model.Account;
+import com.auth_service.auth.domain.model.FederatedIdentity;
 import com.auth_service.auth.domain.model.Role;
 import com.auth_service.auth.infrastructure.controller.dto.ProfileResponse;
 import org.springframework.http.ResponseEntity;
@@ -36,17 +37,20 @@ public class UserController {
         // AccountNotFoundException se deja propagar hacia GlobalExceptionHandler
         // (401 problem+json) — mismo patrón que AuthController con las excepciones
         // de dominio de los demás flujos de autenticación.
-        Account account = getOwnProfileUseCase.getOwnProfile(new GetOwnProfileCommand(authentication.getName()));
-        return ResponseEntity.ok(toResponse(account));
+        GetOwnProfileUseCase.OwnProfile profile = getOwnProfileUseCase.getOwnProfile(new GetOwnProfileCommand(authentication.getName()));
+        return ResponseEntity.ok(toResponse(profile));
     }
 
-    private ProfileResponse toResponse(Account account) {
+    private ProfileResponse toResponse(GetOwnProfileUseCase.OwnProfile profile) {
+        Account account = profile.account();
         return new ProfileResponse(
                 account.id().value().toString(),
                 account.email().value(),
                 account.roles().stream().map(Role::name).collect(Collectors.toSet()),
                 account.status().name(),
-                List.of(),
+                profile.federatedIdentities().stream().map(FederatedIdentity::provider)
+                        .map(provider -> provider.name().toLowerCase())
+                        .toList(),
                 account.createdAt());
     }
 }

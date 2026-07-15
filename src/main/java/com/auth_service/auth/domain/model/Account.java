@@ -42,6 +42,17 @@ public class Account {
                 roles, 0, null, Instant.now());
     }
 
+    /**
+     * Nace ACTIVE directamente, sin contraseña local — FR-6 (Story 2.1). El
+     * proveedor federado (Google/GitHub) ya verificó el email, no hay nada
+     * que confirmar por correo a diferencia de {@link #register}.
+     */
+    public static Account registerFederated(Email email) {
+        Set<Role> roles = new HashSet<>();
+        roles.add(Role.USER);
+        return new Account(AccountId.newId(), email, null, AccountStatus.ACTIVE, roles, 0, null, Instant.now());
+    }
+
     /** Reconstruye una Cuenta ya persistida — usado por el adapter de persistencia. */
     public static Account reconstitute(AccountId id, Email email, HashedPassword passwordHash, AccountStatus status,
                                         Set<Role> roles, int failedAttempts, Instant lockedUntil, Instant createdAt) {

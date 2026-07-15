@@ -1,5 +1,8 @@
 package com.auth_service.auth.config;
 
+import com.auth_service.auth.infrastructure.adapters.oauth.CookieOAuth2AuthorizationRequestRepository;
+import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationFailureHandler;
+import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationSuccessHandler;
 import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
@@ -19,8 +22,10 @@ import java.io.IOException;
 
 /**
  * Deny-all por defecto (AD-11): toda ruta nace protegida; lo público se lista
- * explícitamente. Las historias que introducen /oauth2/** amplían esta lista
- * de rutas públicas — no se anticipan aquí.
+ * explícitamente. {@code /oauth2/**} (inicia el flujo) y {@code /login/oauth2/**}
+ * (callback del proveedor) son públicos desde la Story 2.1 — el propio
+ * {@code oauth2Login()} de Spring Security exige que lo sean, la
+ * autenticación ocurre dentro de ese mismo flujo.
  *
  * <p>Las excepciones de autenticación/autorización se manejan a nivel del
  * filtro de seguridad (no llegan a un {@code @RestControllerAdvice} de
@@ -45,15 +50,26 @@ public class SecurityConfig {
             "/swagger-ui/**",
             "/v3/api-docs",
             "/v3/api-docs/**",
-            "/auth/**"
+            "/auth/**",
+            "/oauth2/**",
+            "/login/oauth2/**"
     };
 
     private final ObjectMapper objectMapper;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final CookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
+    private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+    private final OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
 
-    public SecurityConfig(ObjectMapper objectMapper, JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(ObjectMapper objectMapper, JwtAuthenticationFilter jwtAuthenticationFilter,
+                           CookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository,
+                           OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
+                           OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler) {
         this.objectMapper = objectMapper;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.cookieAuthorizationRequestRepository = cookieAuthorizationRequestRepository;
+        this.oAuth2AuthenticationSuccessHandler = oAuth2AuthenticationSuccessHandler;
+        this.oAuth2AuthenticationFailureHandler = oAuth2AuthenticationFailureHandler;
     }
 
     @Bean
@@ -67,7 +83,14 @@ public class SecurityConfig {
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(authenticationEntryPoint())
                         .accessDeniedHandler(accessDeniedHandler()))
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // Story 2.1 (FR-6) — el AuthorizationRequestRepository respaldado
+                // por cookie (no sesión) mantiene el flujo compatible con
+                // STATELESS (AD-3); los handlers delegan en FederatedLoginUseCase.
+                .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(endpoint -> endpoint.authorizationRequestRepository(cookieAuthorizationRequestRepository))
+                        .successHandler(oAuth2AuthenticationSuccessHandler)
+                        .failureHandler(oAuth2AuthenticationFailureHandler));
 
         return http.build();
     }

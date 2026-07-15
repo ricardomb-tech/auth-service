@@ -4,6 +4,7 @@ import com.auth_service.auth.domain.exception.AccountNotFoundException;
 import com.auth_service.auth.domain.exception.AuthenticationFailedException;
 import com.auth_service.auth.domain.exception.DomainValidationException;
 import com.auth_service.auth.domain.exception.InvalidRefreshTokenException;
+import com.auth_service.auth.domain.exception.OAuth2ExchangeFailedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -65,6 +66,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleAccountNotFoundException(AccountNotFoundException ex) {
         log.warn("Access Token con firma válida rechazado: {}", ex.getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication required.");
+    }
+
+    /**
+     * Mensaje fijo, no {@code ex.getMessage()} — código no reconocido, ya
+     * usado o expirado comparten esta misma excepción precisamente para no
+     * filtrar el motivo real (AD-8), mismo principio que {@link
+     * #handleInvalidRefreshTokenException}.
+     */
+    @ExceptionHandler(OAuth2ExchangeFailedException.class)
+    public ProblemDetail handleOAuth2ExchangeFailedException(OAuth2ExchangeFailedException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Código de intercambio inválido o expirado.");
     }
 
     /**

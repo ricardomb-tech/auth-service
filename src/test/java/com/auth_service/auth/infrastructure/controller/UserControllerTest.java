@@ -9,8 +9,13 @@ import com.auth_service.auth.domain.model.Account;
 import com.auth_service.auth.domain.model.AccountId;
 import com.auth_service.auth.domain.model.AccountStatus;
 import com.auth_service.auth.domain.model.Email;
+import com.auth_service.auth.domain.model.FederatedIdentity;
+import com.auth_service.auth.domain.model.FederatedProvider;
 import com.auth_service.auth.domain.model.HashedPassword;
 import com.auth_service.auth.domain.model.Role;
+import com.auth_service.auth.infrastructure.adapters.oauth.CookieOAuth2AuthorizationRequestRepository;
+import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationFailureHandler;
+import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationSuccessHandler;
 import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -51,13 +56,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = UserController.class)
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class})
 @EnableConfigurationProperties(JwtProperties.class)
-@TestPropertySource(properties = "auth.jwt.secret-current=test-only-jwt-secret-not-for-production-use-32bytes")
+@TestPropertySource(properties = {
+        "auth.jwt.secret-current=test-only-jwt-secret-not-for-production-use-32bytes",
+        "spring.security.oauth2.client.registration.google.client-id=test-client-id",
+        "spring.security.oauth2.client.registration.google.client-secret=test-client-secret",
+        "spring.security.oauth2.client.registration.google.scope=openid,email,profile"
+})
 class UserControllerTest {
 
     private static final String SECRET = "test-only-jwt-secret-not-for-production-use-32bytes";
 
     @Autowired
     private MockMvc mockMvc;
+
+    // Story 2.1: SecurityConfig ahora depende de estos colaboradores de
+    // OAuth2 — mockeados aquí para no arrastrar FederatedLoginUseCase, ajeno
+    // a lo que este slice test verifica (los endpoints de UserController).
+    @MockitoBean
+    private CookieOAuth2AuthorizationRequestRepository cookieOAuth2AuthorizationRequestRepository;
+
+    @MockitoBean
+    private OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+
+    @MockitoBean
+    private OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
 
     @MockitoBean
     private GetOwnProfileUseCase getOwnProfileUseCase;
@@ -90,7 +112,7 @@ class UserControllerTest {
         AccountId accountId = AccountId.newId();
         Account account = accountWith(accountId);
         when(getOwnProfileUseCase.getOwnProfile(eq(new GetOwnProfileCommand(accountId.value().toString()))))
-                .thenReturn(account);
+                .thenReturn(new GetOwnProfileUseCase.OwnProfile(account, List.of()));
 
         mockMvc.perform(get("/api/v1/users/me")
                         .header("Authorization", "Bearer " + tokenFor(accountId.value().toString())))
@@ -103,6 +125,21 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.createdAt").value("2026-07-01T00:00:00Z"));
 
         verify(getOwnProfileUseCase).getOwnProfile(eq(new GetOwnProfileCommand(accountId.value().toString())));
+    }
+
+    @Test
+    void accountWithLinkedGoogleIdentityReturnsItInFederatedIdentities() throws Exception {
+        AccountId accountId = AccountId.newId();
+        Account account = accountWith(accountId);
+        FederatedIdentity identity = FederatedIdentity.reconstitute(
+                java.util.UUID.randomUUID(), accountId, FederatedProvider.GOOGLE, "google-sub-1", Instant.now());
+        when(getOwnProfileUseCase.getOwnProfile(eq(new GetOwnProfileCommand(accountId.value().toString()))))
+                .thenReturn(new GetOwnProfileUseCase.OwnProfile(account, List.of(identity)));
+
+        mockMvc.perform(get("/api/v1/users/me")
+                        .header("Authorization", "Bearer " + tokenFor(accountId.value().toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.federatedIdentities", containsInAnyOrder("google")));
     }
 
     @Test
