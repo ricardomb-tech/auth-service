@@ -10,6 +10,7 @@ import com.auth_service.auth.domain.model.VerificationPurpose;
 import com.auth_service.auth.domain.model.VerificationToken;
 import com.auth_service.auth.domain.port.AccountRepository;
 import com.auth_service.auth.domain.port.VerificationTokenRepository;
+import com.auth_service.auth.infrastructure.adapters.postgresql.VerificationTokenJpaRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -57,6 +58,9 @@ class AuthForgotPasswordIntegrationTest {
     private VerificationTokenRepository verificationTokenRepository;
 
     @Autowired
+    private VerificationTokenJpaRepository verificationTokenJpaRepository;
+
+    @Autowired
     private Clock clock;
 
     private AccountId persistAccount(String email) {
@@ -67,12 +71,19 @@ class AuthForgotPasswordIntegrationTest {
 
     @Test
     void existingAccountReturns202AndPersistsANewPasswordResetToken() throws Exception {
-        persistAccount("recupera@example.com");
+        AccountId accountId = persistAccount("recupera@example.com");
 
         mockMvc.perform(post("/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"recupera@example.com\"}"))
                 .andExpect(status().isAccepted());
+
+        assertThat(verificationTokenJpaRepository.findAll())
+                .anySatisfy(entity -> {
+                    assertThat(entity.getAccountId()).isEqualTo(accountId.value());
+                    assertThat(entity.getPurpose()).isEqualTo(VerificationPurpose.PASSWORD_RESET.name());
+                    assertThat(entity.getConsumedAt()).isNull();
+                });
     }
 
     @Test

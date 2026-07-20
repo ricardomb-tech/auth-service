@@ -50,6 +50,7 @@ class ResetPasswordUseCaseTest {
         VerificationToken.Issued issued = VerificationToken.issue(
                 account.id(), VerificationPurpose.PASSWORD_RESET, Duration.ofHours(1), clock);
         when(verificationTokenRepository.findByTokenHash(issued.token().tokenHash())).thenReturn(Optional.of(issued.token()));
+        when(verificationTokenRepository.consumeIfActive(eq(issued.token().tokenHash()), any(Instant.class))).thenReturn(1);
         when(accountRepository.findById(account.id())).thenReturn(Optional.of(account));
         HashedPassword newHash = new HashedPassword("new-hash");
         when(passwordHasher.hash(any(RawPassword.class))).thenReturn(newHash);
@@ -58,8 +59,26 @@ class ResetPasswordUseCaseTest {
 
         assertThat(account.passwordHash()).isEqualTo(newHash);
         verify(accountRepository).save(account);
-        verify(verificationTokenRepository).save(any(VerificationToken.class));
+        verify(verificationTokenRepository).consumeIfActive(eq(issued.token().tokenHash()), any(Instant.class));
         verify(refreshTokenRepository).revokeAllForAccount(eq(account.id()), any(Instant.class));
+    }
+
+    @Test
+    void concurrentConsumeLosesRaceThrowsAndTouchesNothingElse() {
+        Account account = Account.register(new Email("titular@example.com"), new HashedPassword("old-hash"));
+        VerificationToken.Issued issued = VerificationToken.issue(
+                account.id(), VerificationPurpose.PASSWORD_RESET, Duration.ofHours(1), clock);
+        when(verificationTokenRepository.findByTokenHash(issued.token().tokenHash())).thenReturn(Optional.of(issued.token()));
+        when(passwordHasher.hash(any(RawPassword.class))).thenReturn(new HashedPassword("new-hash"));
+        // Otra petición concurrente ganó la carrera y ya consumió el token en BD justo antes de este UPDATE atómico.
+        when(verificationTokenRepository.consumeIfActive(eq(issued.token().tokenHash()), any(Instant.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> useCase.resetPassword(new ResetPasswordCommand(issued.rawToken(), "NuevaPass1")))
+                .isInstanceOf(DomainValidationException.class);
+
+        verify(accountRepository, never()).findById(any());
+        verify(accountRepository, never()).save(any());
+        verify(refreshTokenRepository, never()).revokeAllForAccount(any(), any());
     }
 
     @Test
@@ -71,6 +90,7 @@ class ResetPasswordUseCaseTest {
 
         verify(accountRepository, never()).findById(any());
         verify(accountRepository, never()).save(any());
+        verify(verificationTokenRepository, never()).consumeIfActive(any(), any());
         verify(refreshTokenRepository, never()).revokeAllForAccount(any(), any());
     }
 
@@ -86,7 +106,7 @@ class ResetPasswordUseCaseTest {
 
         verify(accountRepository, never()).findById(any());
         verify(accountRepository, never()).save(any());
-        verify(verificationTokenRepository, never()).save(any());
+        verify(verificationTokenRepository, never()).consumeIfActive(any(), any());
         verify(refreshTokenRepository, never()).revokeAllForAccount(any(), any());
     }
 
@@ -103,6 +123,7 @@ class ResetPasswordUseCaseTest {
 
         verify(accountRepository, never()).findById(any());
         verify(accountRepository, never()).save(any());
+        verify(verificationTokenRepository, never()).consumeIfActive(any(), any());
         verify(refreshTokenRepository, never()).revokeAllForAccount(any(), any());
     }
 
@@ -118,7 +139,7 @@ class ResetPasswordUseCaseTest {
                 .isInstanceOf(DomainValidationException.class);
 
         // El token nunca se consumió: sigue disponible para un reintento válido.
-        verify(verificationTokenRepository, never()).save(any());
+        verify(verificationTokenRepository, never()).consumeIfActive(any(), any());
         verify(accountRepository, never()).findById(any());
         verify(accountRepository, never()).save(any());
         verify(refreshTokenRepository, never()).revokeAllForAccount(any(), any());

@@ -47,7 +47,7 @@
 # no se bloquean entre sí, pueden intercalarse una vez Epic 4 esté listo).
 
 generated: 2026-07-01
-last_updated: 2026-07-16 # 3-1-recuperacion-de-contrasena → review (dev-story)
+last_updated: 2026-07-20 # 3-1-recuperacion-de-contrasena → done (code-review: 6 patches aplicados, mvn verify en verde)
 project: auth-service
 project_key: NOKEY
 tracking_system: file-system
@@ -70,7 +70,7 @@ development_status:
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-recuperacion-de-contrasena: review
+  3-1-recuperacion-de-contrasena: done
   3-2-bloqueo-automatico-por-fuerza-bruta: backlog
   epic-3-retrospective: optional
 

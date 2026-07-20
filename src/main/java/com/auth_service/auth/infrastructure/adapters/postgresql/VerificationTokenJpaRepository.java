@@ -21,4 +21,9 @@ public interface VerificationTokenJpaRepository extends JpaRepository<Verificati
     @Query("UPDATE VerificationTokenEntity t SET t.consumedAt = :now "
             + "WHERE t.accountId = :accountId AND t.purpose = :purpose AND t.consumedAt IS NULL")
     int invalidateActiveTokens(@Param("accountId") UUID accountId, @Param("purpose") String purpose, @Param("now") Instant now);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE VerificationTokenEntity t SET t.consumedAt = :now "
+            + "WHERE t.tokenHash = :tokenHash AND t.consumedAt IS NULL AND t.expiresAt > :now")
+    int consumeIfActive(@Param("tokenHash") String tokenHash, @Param("now") Instant now);
 }

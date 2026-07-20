@@ -62,23 +62,34 @@ public class ResetPasswordUseCase {
         HashedPassword hashedPassword = passwordHasher.hash(rawPassword);
 
         // Si el token ya fue usado o expiró, consume() lanza aquí y ni la
-        // Cuenta ni las Familias de Refresh Tokens se tocan (AC #4).
-        VerificationToken consumedToken = token.consume(clock);
+        // Cuenta ni las Familias de Refresh Tokens se tocan (AC #4). El
+        // objeto devuelto solo sirve para esta validación en memoria — la
+        // consumición real y persistida ocurre en el UPDATE atómico de abajo.
+        token.consume(clock);
+
+        // Guarda anti-carrera: dos solicitudes concurrentes con el mismo
+        // token pueden pasar ambas la validación en memoria de arriba antes
+        // de que cualquiera persista. Este UPDATE condicional (WHERE
+        // consumed_at IS NULL AND expires_at > now) es la única fuente de
+        // verdad sobre el "un solo uso" — si otra petición ganó la carrera,
+        // afecta 0 filas y abortamos sin tocar la Cuenta ni las Familias.
+        int updated = verificationTokenRepository.consumeIfActive(tokenHash, Instant.now(clock));
+        if (updated == 0) {
+            throw new DomainValidationException("El token de recuperación ya fue utilizado.");
+        }
 
         // revokeAllForAccount es un @Modifying(clearAutomatically = true) —
         // limpia el contexto de persistencia de Hibernate. Debe ejecutarse
         // ANTES de cualquier save() de esta transacción: si corriera después,
         // borraría del contexto los cambios de save() aún no flusheados
         // (merge() no ejecuta UPDATE de inmediato), perdiéndolos en
-        // silencio — ni el token quedaría consumido ni la contraseña
-        // actualizada en BD pese a que el caso de uso "termina" sin error.
+        // silencio — ni la contraseña quedaría actualizada en BD pese a que
+        // el caso de uso "termina" sin error.
         refreshTokenRepository.revokeAllForAccount(token.accountId(), Instant.now(clock));
-
-        verificationTokenRepository.save(consumedToken);
 
         Account account = accountRepository.findById(token.accountId())
                 .orElseThrow(() -> new IllegalStateException(
-                        "Cuenta no encontrada para el token de recuperación: " + token.accountId()));
+                        "Cuenta no encontrada para el token de recuperación."));
         account.changePassword(hashedPassword);
         accountRepository.save(account);
     }

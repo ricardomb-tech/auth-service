@@ -41,6 +41,11 @@ public class VerificationTokenRepositoryAdapter implements VerificationTokenRepo
         return jpaRepository.invalidateActiveTokens(accountId.value(), purpose.name(), now);
     }
 
+    @Override
+    public int consumeIfActive(String tokenHash, Instant now) {
+        return jpaRepository.consumeIfActive(tokenHash, now);
+    }
+
     private VerificationToken toDomain(VerificationTokenEntity entity) {
         return VerificationToken.reconstitute(
                 entity.getId(),

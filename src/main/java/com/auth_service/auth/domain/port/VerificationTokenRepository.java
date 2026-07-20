@@ -15,4 +15,11 @@ public interface VerificationTokenRepository {
 
     /** Invalida (marca como consumido) todo token sin consumir de la Cuenta y propósito dados. Devuelve cuántas filas afectó. */
     int invalidateActiveTokens(AccountId accountId, VerificationPurpose purpose, Instant now);
+
+    /**
+     * Consume atómicamente el token con este hash si sigue activo (no consumido, no expirado).
+     * Guarda anti-carrera: dos llamadas concurrentes con el mismo hash solo pueden ver una
+     * fila afectada entre ambas. Devuelve 1 si tuvo efecto, 0 si el token ya no estaba activo.
+     */
+    int consumeIfActive(String tokenHash, Instant now);
 }

@@ -51,4 +51,29 @@ class AuthTokenPropertiesTest {
 
         assertThat(properties.refreshTtl()).isEqualTo(Duration.ofDays(90));
     }
+
+    @Test
+    void rejectsZeroPasswordResetTtl() {
+        assertThatThrownBy(() -> new AuthTokenProperties(null, null, Duration.ZERO))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void rejectsNegativePasswordResetTtl() {
+        assertThatThrownBy(() -> new AuthTokenProperties(null, null, Duration.ofHours(-1)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void rejectsPasswordResetTtlLongerThanNinetyDays() {
+        assertThatThrownBy(() -> new AuthTokenProperties(null, null, Duration.ofDays(91)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void acceptsPasswordResetTtlExactlyNinetyDays() {
+        AuthTokenProperties properties = new AuthTokenProperties(null, null, Duration.ofDays(90));
+
+        assertThat(properties.passwordResetTtl()).isEqualTo(Duration.ofDays(90));
+    }
 }

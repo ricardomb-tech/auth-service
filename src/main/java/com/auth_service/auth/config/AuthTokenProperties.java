@@ -25,6 +25,10 @@ public record AuthTokenProperties(Duration verificationTtl, Duration refreshTtl,
         }
         if (passwordResetTtl == null) {
             passwordResetTtl = Duration.ofHours(1);
+        } else if (passwordResetTtl.isZero() || passwordResetTtl.isNegative()) {
+            throw new IllegalStateException("auth.token.password-reset-ttl debe ser una duración positiva.");
+        } else if (passwordResetTtl.compareTo(Duration.ofDays(90)) > 0) {
+            throw new IllegalStateException("auth.token.password-reset-ttl no puede superar 90 días.");
         }
     }
 }
