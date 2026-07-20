@@ -47,7 +47,7 @@
 # no se bloquean entre sí, pueden intercalarse una vez Epic 4 esté listo).
 
 generated: 2026-07-01
-last_updated: 2026-07-15 # 2-1-login-con-google → done (code review findings cerrados)
+last_updated: 2026-07-16 # 3-1-recuperacion-de-contrasena → review (dev-story)
 project: auth-service
 project_key: NOKEY
 tracking_system: file-system
@@ -66,11 +66,11 @@ development_status:
 
   epic-2: in-progress
   2-1-login-con-google: done
-  2-2-login-con-github: backlog
+  2-2-login-con-github: done
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-recuperacion-de-contrasena: backlog
+  epic-3: in-progress
+  3-1-recuperacion-de-contrasena: review
   3-2-bloqueo-automatico-por-fuerza-bruta: backlog
   epic-3-retrospective: optional
 

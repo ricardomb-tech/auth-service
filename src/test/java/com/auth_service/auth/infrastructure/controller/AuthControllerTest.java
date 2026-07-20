@@ -8,7 +8,9 @@ import com.auth_service.auth.application.usecase.OAuth2ExchangeUseCase;
 import com.auth_service.auth.application.usecase.RefreshTokenUseCase;
 import com.auth_service.auth.application.usecase.RegisterAccountResult;
 import com.auth_service.auth.application.usecase.RegisterAccountUseCase;
+import com.auth_service.auth.application.usecase.RequestPasswordResetUseCase;
 import com.auth_service.auth.application.usecase.ResendVerificationUseCase;
+import com.auth_service.auth.application.usecase.ResetPasswordUseCase;
 import com.auth_service.auth.application.usecase.TokenIssuer;
 import com.auth_service.auth.application.usecase.VerifyAccountUseCase;
 import com.auth_service.auth.config.JwtProperties;
@@ -17,6 +19,7 @@ import com.auth_service.auth.domain.exception.AuthenticationFailedException;
 import com.auth_service.auth.domain.exception.InvalidRefreshTokenException;
 import com.auth_service.auth.domain.exception.OAuth2ExchangeFailedException;
 import com.auth_service.auth.infrastructure.adapters.oauth.CookieOAuth2AuthorizationRequestRepository;
+import com.auth_service.auth.infrastructure.adapters.oauth.GitHubOAuth2UserService;
 import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationFailureHandler;
 import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationSuccessHandler;
 import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
@@ -76,6 +79,9 @@ class AuthControllerTest {
     private OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
 
     @MockitoBean
+    private GitHubOAuth2UserService gitHubOAuth2UserService;
+
+    @MockitoBean
     private RegisterAccountUseCase registerAccountUseCase;
 
     @MockitoBean
@@ -83,6 +89,12 @@ class AuthControllerTest {
 
     @MockitoBean
     private ResendVerificationUseCase resendVerificationUseCase;
+
+    @MockitoBean
+    private RequestPasswordResetUseCase requestPasswordResetUseCase;
+
+    @MockitoBean
+    private ResetPasswordUseCase resetPasswordUseCase;
 
     @MockitoBean
     private LoginUseCase loginUseCase;

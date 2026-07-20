@@ -58,7 +58,11 @@ class RefreshTokenRepositoryAdapterTest {
     private AccountRepository accountRepository;
 
     private AccountId persistAccount() {
-        Account account = Account.reconstitute(AccountId.newId(), new Email("titular@example.com"),
+        return persistAccount("titular@example.com");
+    }
+
+    private AccountId persistAccount(String email) {
+        Account account = Account.reconstitute(AccountId.newId(), new Email(email),
                 new HashedPassword("bcrypt-hash"), AccountStatus.ACTIVE, Set.of(Role.USER), 0, null, Instant.now());
         return accountRepository.save(account).id();
     }
@@ -130,5 +134,25 @@ class RefreshTokenRepositoryAdapterTest {
         int secondAttempt = refreshTokenRepository.revokeFamily(familyId, Instant.now());
 
         assertThat(secondAttempt).isEqualTo(0);
+    }
+
+    @Test
+    void revokeAllForAccountRevokesEveryFamilyOfThatAccountButNotOtherAccounts() {
+        AccountId accountId = persistAccount();
+        UUID familyOne = UUID.randomUUID();
+        UUID familyTwo = UUID.randomUUID();
+        RefreshToken tokenFamilyOne = persistToken(accountId, familyOne);
+        RefreshToken tokenFamilyTwo = persistToken(accountId, familyTwo);
+
+        AccountId otherAccountId = persistAccount("otro-titular@example.com");
+        RefreshToken otherAccountToken = persistToken(otherAccountId, UUID.randomUUID());
+
+        Instant revokedAt = Instant.now();
+        int affected = refreshTokenRepository.revokeAllForAccount(accountId, revokedAt);
+
+        assertThat(affected).isEqualTo(2);
+        assertThat(refreshTokenRepository.findByTokenHash(tokenFamilyOne.tokenHash()).orElseThrow().revokedAt()).isNotNull();
+        assertThat(refreshTokenRepository.findByTokenHash(tokenFamilyTwo.tokenHash()).orElseThrow().revokedAt()).isNotNull();
+        assertThat(refreshTokenRepository.findByTokenHash(otherAccountToken.tokenHash()).orElseThrow().revokedAt()).isNull();
     }
 }

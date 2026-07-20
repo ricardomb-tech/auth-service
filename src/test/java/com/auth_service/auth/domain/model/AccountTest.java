@@ -83,4 +83,28 @@ class AccountTest {
 
         assertThat(first.id()).isNotEqualTo(second.id());
     }
+
+    @Test
+    void changePasswordReplacesTheHashWithoutAffectingOtherFields() {
+        Account account = Account.reconstitute(
+                AccountId.newId(), new Email("titular@example.com"), new HashedPassword("old-hash"),
+                AccountStatus.LOCKED, Set.of(Role.USER), 3, Instant.now().plusSeconds(60), Instant.now());
+        HashedPassword newHash = new HashedPassword("new-hash");
+
+        account.changePassword(newHash);
+
+        assertThat(account.passwordHash()).isEqualTo(newHash);
+        assertThat(account.status()).isEqualTo(AccountStatus.LOCKED);
+        assertThat(account.failedAttempts()).isEqualTo(3);
+    }
+
+    @Test
+    void changePasswordWorksOnAFederatedAccountWithNoExistingHash() {
+        Account account = Account.registerFederated(new Email("federado@example.com"));
+        HashedPassword newHash = new HashedPassword("new-hash");
+
+        account.changePassword(newHash);
+
+        assertThat(account.passwordHash()).isEqualTo(newHash);
+    }
 }

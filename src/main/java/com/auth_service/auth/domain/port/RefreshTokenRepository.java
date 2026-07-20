@@ -1,5 +1,6 @@
 package com.auth_service.auth.domain.port;
 
+import com.auth_service.auth.domain.model.AccountId;
 import com.auth_service.auth.domain.model.RefreshToken;
 
 import java.time.Instant;
@@ -17,4 +18,7 @@ public interface RefreshTokenRepository {
 
     /** Revoca (marca `revoked_at`) todas las filas de la familia que aún no estén revocadas, en un único UPDATE masivo. Devuelve filas afectadas. */
     int revokeFamily(UUID familyId, Instant revokedAt);
+
+    /** Revoca (marca `revoked_at`) todas las familias de la Cuenta que aún no estén revocadas, en un único UPDATE masivo. Devuelve filas afectadas. */
+    int revokeAllForAccount(AccountId accountId, Instant revokedAt);
 }

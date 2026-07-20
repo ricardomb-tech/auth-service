@@ -75,12 +75,15 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
                 Boolean verified = oidcUser.getEmailVerified();
                 emailVerified = verified != null && verified;
             } else {
-                // Sin claims OIDC no hay forma de confirmar la verificación del
-                // proveedor -> se trata como no verificado (AC #3, mismo criterio
-                // que FederatedLoginUseCase aplica al claim email_verified).
+                // Proveedores no-OIDC (GitHub, Story 2.2) no traen email_verified
+                // nativo — GitHubOAuth2UserService ya resolvió el email primario
+                // verificado y lo fusionó como los mismos atributos sintéticos
+                // "email"/"email_verified" que el branch OIDC lee de Google,
+                // así este handler no bifurca lógica de negocio por proveedor.
                 providerUserId = principal.getName();
                 email = principal.getAttribute("email");
-                emailVerified = false;
+                Boolean verified = principal.getAttribute("email_verified");
+                emailVerified = verified != null && verified;
             }
 
             FederatedLoginCommand command = new FederatedLoginCommand(registrationId, providerUserId, email, emailVerified);

@@ -36,7 +36,8 @@
 - Renovación de tokens con **rotación** y **detección de reuso** (revoca toda la familia si un refresh token ya usado vuelve a presentarse).
 - Logout idempotente.
 - Consulta del propio perfil (`/api/v1/users/me`).
-- **Login federado con Google (OAuth2)**, con vinculación de identidad federada a la cuenta existente.
+- **Login federado con Google y GitHub (OAuth2)**, con vinculación de identidad federada a la cuenta existente.
+- **Recuperación de contraseña** por email (anti-enumeración, token de un solo uso) — en revisión, ver [estado del proyecto](#-estado-del-proyecto).
 - Todas las rutas son privadas por defecto; lo público se declara explícitamente (deny-all).
 
 ---
@@ -48,11 +49,13 @@ El desarrollo sigue un roadmap por épicas y historias (`docs/implementation-art
 | Épica | Descripción | Estado |
 |---|---|---|
 | **Epic 1** | Fundaciones + identidad con credenciales (Clean Architecture, registro, verificación, login, refresh+rotación, logout, perfil propio) | ✅ **Completa** (Stories 1.1 → 1.7) |
-| **Epic 2** | Login social (OAuth2) | 🔄 En progreso — Story 2.1 (Google) ✅ completa, Story 2.2 (GitHub) pendiente |
-| **Epic 3** | Recuperación de contraseña + bloqueo por fuerza bruta | ⏳ Backlog |
+| **Epic 2** | Login social (OAuth2) | ✅ **Completa** — Story 2.1 (Google) y Story 2.2 (GitHub) |
+| **Epic 3** | Recuperación de contraseña + bloqueo por fuerza bruta | 🔄 En progreso — Story 3.1 (recuperación de contraseña) en revisión, Story 3.2 (bloqueo por fuerza bruta) en backlog |
 | **Epic 4** | Administración de cuentas + auditoría | ⏳ Backlog |
 | **Epic 5** | Observabilidad (salud, métricas, trazas) y resiliencia ante proveedores externos | ⏳ Backlog |
 | **Epic 6** | Integración por eventos (outbox transaccional) | ⏳ Backlog |
+
+> Este README se actualiza junto con cada historia que cambia de estado. La fuente de verdad para el estado historia-por-historia es siempre [`sprint-status.yaml`](docs/implementation-artifacts/sprint-status.yaml); si notas una discrepancia, ese archivo manda.
 
 Detalle historia por historia disponible en [`docs/implementation-artifacts/`](docs/implementation-artifacts/) y el tracking vivo en [`sprint-status.yaml`](docs/implementation-artifacts/sprint-status.yaml).
 
@@ -88,7 +91,7 @@ Puntos de diseño destacados:
 |---|---|
 | Lenguaje | Java 21 |
 | Framework | Spring Boot 3.4.4 (Web, Security, Data JPA, OAuth2 Client, Validation, Mail, Actuator) |
-| Autenticación | JWT (`jjwt` 0.13), Spring Security, OAuth2 (Google; GitHub en progreso) |
+| Autenticación | JWT (`jjwt` 0.13), Spring Security, OAuth2 (Google, GitHub) |
 | Base de datos | PostgreSQL 15 + Flyway (migraciones versionadas) |
 | Mensajería | Spring Kafka / Redpanda (preparado para outbox transaccional de Epic 6) |
 | Email (dev) | MailHog (SMTP + UI de captura) |
@@ -187,7 +190,10 @@ DB_PASSWORD=auth_service
 JWT_SECRET_CURRENT=change-me-to-a-256-bit-random-secret
 JWT_SECRET_PREVIOUS=
 
-# OAuth2 — Google ya implementado (Story 2.1), GitHub en progreso
+# TTLs de tokens (auth.token.*, AD-10, NFR-7)
+# verification-ttl=24h · refresh-ttl=7d · password-reset-ttl=1h (defaults, override si hace falta)
+
+# OAuth2 — Google (Story 2.1) y GitHub (Story 2.2) implementados
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GITHUB_CLIENT_ID=
@@ -222,10 +228,13 @@ APP_BASE_URL=http://localhost:8080
 | `POST` | `/auth/register` | Registra una cuenta y envía email de verificación. Respuesta idéntica exista o no el email (anti-enumeración). |
 | `POST` | `/auth/verify` | Verifica la cuenta con el token recibido por email. |
 | `POST` | `/auth/resend-verification` | Reenvía el email de verificación si aplica. |
+| `POST` | `/auth/forgot-password` | 🔄 *En revisión (Story 3.1).* Envía un email con token de recuperación de contraseña. Respuesta idéntica exista o no la cuenta (anti-enumeración). |
+| `POST` | `/auth/reset-password` | 🔄 *En revisión (Story 3.1).* Establece una nueva contraseña a partir de un token de recuperación válido y no consumido. |
 | `POST` | `/auth/login` | Valida credenciales y emite Access Token (JWT, 15 min) + Refresh Token (7 días). |
 | `POST` | `/auth/refresh` | Rota el Refresh Token y emite un nuevo par. Detecta reuso y revoca la familia completa si el token ya fue usado. |
 | `POST` | `/auth/logout` | Revoca el Refresh Token. Idempotente. |
 | `GET` | `/oauth2/authorization/google` | Inicia el flujo de login federado con Google (redirige a Google). |
+| `GET` | `/oauth2/authorization/github` | Inicia el flujo de login federado con GitHub (redirige a GitHub). |
 | `POST` | `/auth/oauth2/exchange` | Canjea el código de un solo uso emitido tras un login federado exitoso por Access+Refresh Token (evita exponer tokens en la URL de redirect). |
 
 ### Usuario (`/api/v1/users`) — requiere Access Token
@@ -267,8 +276,21 @@ El detalle completo vive en `docs/planning-artifacts/architecture/`. Algunas dec
 
 Este proyecto documenta explícitamente los gaps encontrados en cada revisión de código en [`docs/implementation-artifacts/deferred-work.md`](docs/implementation-artifacts/deferred-work.md), en vez de dejarlos implícitos. Algunos ejemplos vigentes:
 
-- No hay rate limiting ni bloqueo por fuerza bruta todavía en `/auth/login` (llega con Epic 3).
-- Existen canales laterales de timing entre "cuenta no existe" y "cuenta existe" en varios endpoints (mismo cuerpo de respuesta, latencia distinguible); mitigación de costo equivalente pendiente de diseño.
+- No hay rate limiting ni bloqueo por fuerza bruta todavía en `/auth/login` ni `/auth/forgot-password` (llega con Story 3.2).
+- Existen canales laterales de timing entre "cuenta no existe" y "cuenta existe" en varios endpoints (mismo cuerpo de respuesta, latencia distinguible); ya van 5 apariciones del mismo patrón (Stories 1.2, 1.3, 1.4, 1.6, 3.1) — candidato fuerte a una historia dedicada de mitigación transversal en vez de seguir difiriéndolo caso por caso.
 - El perfil `prod` no valida de forma fail-fast que las variables de entorno requeridas estén presentes con un mensaje claro.
 
 Antes de tocar código en un área, conviene revisar si ya hay un ítem diferido relacionado en ese archivo.
+
+---
+
+## 🔄 Mantenimiento de este README
+
+Este documento describe el estado **real** del proyecto, no el aspiracional — se actualiza en el mismo commit que cierra o avanza una historia. Al terminar una historia:
+
+1. Actualizar la tabla de [Estado del proyecto](#-estado-del-proyecto) si cambió el estado de una épica o historia.
+2. Añadir/editar la fila correspondiente en [Endpoints de la API](#-endpoints-de-la-api) si se agregó o modificó un endpoint.
+3. Reflejar nuevas variables de entorno en [Configuración](#-configuración-variables-de-entorno) y en [`.env.example`](.env.example).
+4. Si la historia cerró un ítem de [`deferred-work.md`](docs/implementation-artifacts/deferred-work.md), quitarlo de la lista de ejemplos vigentes de este README (el archivo completo siempre es la fuente de verdad).
+
+Este repositorio es compatible con generadores de documentación como [Mintlify](https://mintlify.wiki/): la estructura en secciones con encabezados estables, la tabla de contenidos y las tablas de endpoints están pensadas para poder alimentar guías y referencia de API generadas automáticamente sin reescritura manual.

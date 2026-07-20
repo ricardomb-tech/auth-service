@@ -35,4 +35,10 @@ public class LoggingEmailSender implements EmailSender {
         String link = appBaseUrl + "/auth/verify?token=" + rawToken;
         log.info("[dev] Email de verificación para {} -> {}", recipient.value(), link);
     }
+
+    @Override
+    public void sendPasswordResetEmail(Email recipient, String rawToken) {
+        String link = appBaseUrl + "/auth/reset-password?token=" + rawToken;
+        log.info("[dev] Email de recuperación de contraseña para {} -> {}", recipient.value(), link);
+    }
 }

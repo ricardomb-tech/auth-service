@@ -32,4 +32,14 @@ public class EmailNotificationListener {
                     event.recipient(), ex);
         }
     }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onPasswordResetEmailRequested(PasswordResetEmailRequested event) {
+        try {
+            emailSender.sendPasswordResetEmail(event.recipient(), event.rawToken());
+        } catch (RuntimeException ex) {
+            log.error("Fallo al enviar email de recuperación de contraseña a accountEmail={} (no afecta la transacción ya confirmada)",
+                    event.recipient(), ex);
+        }
+    }
 }

@@ -10,11 +10,16 @@ import com.auth_service.auth.application.usecase.RefreshCommand;
 import com.auth_service.auth.application.usecase.RefreshTokenUseCase;
 import com.auth_service.auth.application.usecase.RegisterAccountCommand;
 import com.auth_service.auth.application.usecase.RegisterAccountUseCase;
+import com.auth_service.auth.application.usecase.RequestPasswordResetCommand;
+import com.auth_service.auth.application.usecase.RequestPasswordResetUseCase;
 import com.auth_service.auth.application.usecase.ResendVerificationCommand;
 import com.auth_service.auth.application.usecase.ResendVerificationUseCase;
+import com.auth_service.auth.application.usecase.ResetPasswordCommand;
+import com.auth_service.auth.application.usecase.ResetPasswordUseCase;
 import com.auth_service.auth.application.usecase.TokenIssuer;
 import com.auth_service.auth.application.usecase.VerifyAccountUseCase;
 import com.auth_service.auth.application.usecase.VerifyCommand;
+import com.auth_service.auth.infrastructure.controller.dto.ForgotPasswordRequest;
 import com.auth_service.auth.infrastructure.controller.dto.LoginRequest;
 import com.auth_service.auth.infrastructure.controller.dto.LoginResponse;
 import com.auth_service.auth.infrastructure.controller.dto.LogoutRequest;
@@ -23,6 +28,7 @@ import com.auth_service.auth.infrastructure.controller.dto.OAuth2ExchangeRequest
 import com.auth_service.auth.infrastructure.controller.dto.RefreshRequest;
 import com.auth_service.auth.infrastructure.controller.dto.RegisterRequest;
 import com.auth_service.auth.infrastructure.controller.dto.ResendVerificationRequest;
+import com.auth_service.auth.infrastructure.controller.dto.ResetPasswordRequest;
 import com.auth_service.auth.infrastructure.controller.dto.VerifyRequest;
 import jakarta.validation.Valid;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -46,9 +52,17 @@ public class AuthController {
     private static final MessageResponse RESEND_VERIFICATION_RESPONSE =
             new MessageResponse("Si el email es válido y está pendiente de verificación, recibirás un correo con un nuevo enlace.");
 
+    private static final MessageResponse FORGOT_PASSWORD_RESPONSE =
+            new MessageResponse("Si el email es válido, recibirás un correo con instrucciones para restablecer tu contraseña.");
+
+    private static final MessageResponse RESET_PASSWORD_RESPONSE =
+            new MessageResponse("Tu contraseña ha sido restablecida. Ya puedes iniciar sesión con ella.");
+
     private final RegisterAccountUseCase registerAccountUseCase;
     private final VerifyAccountUseCase verifyAccountUseCase;
     private final ResendVerificationUseCase resendVerificationUseCase;
+    private final RequestPasswordResetUseCase requestPasswordResetUseCase;
+    private final ResetPasswordUseCase resetPasswordUseCase;
     private final LoginUseCase loginUseCase;
     private final RefreshTokenUseCase refreshTokenUseCase;
     private final LogoutUseCase logoutUseCase;
@@ -57,6 +71,8 @@ public class AuthController {
     public AuthController(RegisterAccountUseCase registerAccountUseCase,
                            VerifyAccountUseCase verifyAccountUseCase,
                            ResendVerificationUseCase resendVerificationUseCase,
+                           RequestPasswordResetUseCase requestPasswordResetUseCase,
+                           ResetPasswordUseCase resetPasswordUseCase,
                            LoginUseCase loginUseCase,
                            RefreshTokenUseCase refreshTokenUseCase,
                            LogoutUseCase logoutUseCase,
@@ -64,6 +80,8 @@ public class AuthController {
         this.registerAccountUseCase = registerAccountUseCase;
         this.verifyAccountUseCase = verifyAccountUseCase;
         this.resendVerificationUseCase = resendVerificationUseCase;
+        this.requestPasswordResetUseCase = requestPasswordResetUseCase;
+        this.resetPasswordUseCase = resetPasswordUseCase;
         this.loginUseCase = loginUseCase;
         this.refreshTokenUseCase = refreshTokenUseCase;
         this.logoutUseCase = logoutUseCase;
@@ -99,6 +117,24 @@ public class AuthController {
         // exista o no la Cuenta, y también si ya no aplica (AC #4).
         resendVerificationUseCase.resend(new ResendVerificationCommand(request.email()));
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(RESEND_VERIFICATION_RESPONSE);
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        // El resultado se ignora deliberadamente — misma respuesta genérica
+        // exista o no la Cuenta (anti-enumeración, AC #1 de la Story 3.1).
+        requestPasswordResetUseCase.requestReset(new RequestPasswordResetCommand(request.email()));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(FORGOT_PASSWORD_RESPONSE);
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        // A diferencia de /forgot-password, aquí el error SÍ es distinguible
+        // del éxito (DomainValidationException propaga a GlobalExceptionHandler
+        // → 400 problem+json) — el visitante ya posee el token, no hay
+        // enumeración en juego (mismo patrón que /verify).
+        resetPasswordUseCase.resetPassword(new ResetPasswordCommand(request.token(), request.newPassword()));
+        return ResponseEntity.ok(RESET_PASSWORD_RESPONSE);
     }
 
     @PostMapping("/login")

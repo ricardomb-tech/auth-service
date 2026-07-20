@@ -38,7 +38,7 @@ class TokenIssuerTest {
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-10T00:00:00Z"), ZoneOffset.UTC);
     private final JwtProperties jwtProperties = new JwtProperties(SECRET, null, Duration.ofMinutes(15), "auth-service");
-    private final AuthTokenProperties authTokenProperties = new AuthTokenProperties(null, Duration.ofDays(7));
+    private final AuthTokenProperties authTokenProperties = new AuthTokenProperties(null, Duration.ofDays(7), null);
     private TokenIssuer tokenIssuer;
 
     @BeforeEach
@@ -108,7 +108,7 @@ class TokenIssuerTest {
     @Test
     void rejectsConstructionWhenAccessTtlIsNotShorterThanRefreshTtl() {
         JwtProperties equalTtl = new JwtProperties(SECRET, null, Duration.ofHours(1), "auth-service");
-        AuthTokenProperties refreshTtl = new AuthTokenProperties(null, Duration.ofHours(1));
+        AuthTokenProperties refreshTtl = new AuthTokenProperties(null, Duration.ofHours(1), null);
 
         assertThatThrownBy(() -> new TokenIssuer(refreshTokenRepository, equalTtl, refreshTtl, clock))
                 .isInstanceOf(IllegalStateException.class);

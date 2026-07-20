@@ -15,10 +15,14 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
@@ -51,6 +55,20 @@ class OAuth2AuthenticationSuccessHandlerTest {
 
     private OAuth2AuthenticationToken tokenFor(OidcUser user) {
         return new OAuth2AuthenticationToken(user, user.getAuthorities(), "google");
+    }
+
+    // Representa el resultado ya enriquecido por GitHubOAuth2UserService (Story
+    // 2.2): un OAuth2User no-OIDC con los atributos sintéticos "email"/"email_verified".
+    private OAuth2User gitHubUser(String id, String email, Boolean emailVerified) {
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put("id", id);
+        attributes.put("email", email);
+        attributes.put("email_verified", emailVerified);
+        return new DefaultOAuth2User(List.of(new SimpleGrantedAuthority("ROLE_USER")), attributes, "id");
+    }
+
+    private OAuth2AuthenticationToken tokenFor(OAuth2User user) {
+        return new OAuth2AuthenticationToken(user, user.getAuthorities(), "github");
     }
 
     @Test
@@ -99,6 +117,38 @@ class OAuth2AuthenticationSuccessHandlerTest {
 
         handler.onAuthenticationSuccess(request, response, authentication);
 
+        verify(failureHandler).onAuthenticationFailure(eq(request), eq(response), any(AuthenticationServiceException.class));
+        verify(response, never()).sendRedirect(any());
+    }
+
+    @Test
+    void nonOidcPrincipalWithSyntheticEmailVerifiedTrueReachesUseCaseAsVerified() throws Exception {
+        OAuth2User user = gitHubUser("12345", "octocat@example.com", true);
+        OAuth2AuthenticationToken authentication = tokenFor(user);
+        TokenIssuer.IssuedTokens issuedTokens = new TokenIssuer.IssuedTokens("access-abc", "refresh-xyz", 900L);
+        when(federatedLoginUseCase.login(any())).thenReturn(issuedTokens);
+        when(exchangeCodeStore.issue(any())).thenReturn("exchange-code-456");
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        verify(federatedLoginUseCase).login(eq(new FederatedLoginCommand("github", "12345", "octocat@example.com", true)));
+        verify(response).sendRedirect(contains("code=exchange-code-456"));
+        verify(failureHandler, never()).onAuthenticationFailure(any(), any(), any());
+    }
+
+    @Test
+    void nonOidcPrincipalWithoutSyntheticEmailVerifiedIsTreatedAsUnverified() throws Exception {
+        OAuth2User user = gitHubUser("67890", null, false);
+        OAuth2AuthenticationToken authentication = tokenFor(user);
+        when(federatedLoginUseCase.login(any())).thenThrow(new FederatedLoginFailedException("Email no verificado por el proveedor."));
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        verify(federatedLoginUseCase).login(eq(new FederatedLoginCommand("github", "67890", null, false)));
         verify(failureHandler).onAuthenticationFailure(eq(request), eq(response), any(AuthenticationServiceException.class));
         verify(response, never()).sendRedirect(any());
     }

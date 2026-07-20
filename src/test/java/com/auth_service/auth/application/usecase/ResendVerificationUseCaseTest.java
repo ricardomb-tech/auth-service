@@ -39,7 +39,7 @@ class ResendVerificationUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new ResendVerificationUseCase(accountRepository, verificationTokenRepository,
-                new AuthTokenProperties(Duration.ofHours(24), Duration.ofDays(7)), eventPublisher, clock);
+                new AuthTokenProperties(Duration.ofHours(24), Duration.ofDays(7), Duration.ofHours(1)), eventPublisher, clock);
     }
 
     @Test

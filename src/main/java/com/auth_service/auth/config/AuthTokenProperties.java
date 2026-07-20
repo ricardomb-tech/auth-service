@@ -7,10 +7,10 @@ import java.time.Duration;
 /**
  * TTLs de tokens configurables por entorno (AD-10, NFR-7) — nunca
  * {@code @Value} disperso. {@code auth.token.verification-ttl}/
- * {@code refresh-ttl} en {@code application.properties}.
+ * {@code refresh-ttl}/{@code password-reset-ttl} en {@code application.properties}.
  */
 @ConfigurationProperties(prefix = "auth.token")
-public record AuthTokenProperties(Duration verificationTtl, Duration refreshTtl) {
+public record AuthTokenProperties(Duration verificationTtl, Duration refreshTtl, Duration passwordResetTtl) {
 
     public AuthTokenProperties {
         if (verificationTtl == null) {
@@ -22,6 +22,9 @@ public record AuthTokenProperties(Duration verificationTtl, Duration refreshTtl)
             throw new IllegalStateException("auth.token.refresh-ttl debe ser una duración positiva.");
         } else if (refreshTtl.compareTo(Duration.ofDays(90)) > 0) {
             throw new IllegalStateException("auth.token.refresh-ttl no puede superar 90 días.");
+        }
+        if (passwordResetTtl == null) {
+            passwordResetTtl = Duration.ofHours(1);
         }
     }
 }

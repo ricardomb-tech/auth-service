@@ -47,6 +47,11 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
         return jpaRepository.revokeFamily(familyId, revokedAt);
     }
 
+    @Override
+    public int revokeAllForAccount(AccountId accountId, Instant revokedAt) {
+        return jpaRepository.revokeAllForAccount(accountId.value(), revokedAt);
+    }
+
     private RefreshToken toDomain(RefreshTokenEntity entity) {
         return RefreshToken.reconstitute(
                 entity.getId(),

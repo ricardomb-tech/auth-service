@@ -15,7 +15,7 @@ public class Account {
 
     private final AccountId id;
     private final Email email;
-    private final HashedPassword passwordHash;
+    private HashedPassword passwordHash;
     private AccountStatus status;
     private final Set<Role> roles;
     private int failedAttempts;
@@ -69,6 +69,16 @@ public class Account {
             throw new DomainValidationException("Solo una Cuenta pendiente de verificación puede activarse.");
         }
         this.status = AccountStatus.ACTIVE;
+    }
+
+    /**
+     * Restablecimiento de contraseña (Story 3.1, FR-7) — sin restricción de
+     * {@link AccountStatus}: una Cuenta {@code LOCKED} también puede
+     * recuperar su acceso por este camino; no la desbloquea (eso solo ocurre
+     * en {@code LoginUseCase} al expirar {@code lockedUntil}).
+     */
+    public void changePassword(HashedPassword newPasswordHash) {
+        this.passwordHash = newPasswordHash;
     }
 
     public AccountId id() {

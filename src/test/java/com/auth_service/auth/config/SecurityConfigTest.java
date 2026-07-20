@@ -1,6 +1,7 @@
 package com.auth_service.auth.config;
 
 import com.auth_service.auth.infrastructure.adapters.oauth.CookieOAuth2AuthorizationRequestRepository;
+import com.auth_service.auth.infrastructure.adapters.oauth.GitHubOAuth2UserService;
 import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationFailureHandler;
 import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationSuccessHandler;
 import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
@@ -56,7 +57,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         // test nunca llama a Google de verdad.
         "spring.security.oauth2.client.registration.google.client-id=test-client-id",
         "spring.security.oauth2.client.registration.google.client-secret=test-client-secret",
-        "spring.security.oauth2.client.registration.google.scope=openid,email,profile"
+        "spring.security.oauth2.client.registration.google.scope=openid,email,profile",
+        "spring.security.oauth2.client.registration.github.client-id=test-github-client-id",
+        "spring.security.oauth2.client.registration.github.client-secret=test-github-client-secret",
+        "spring.security.oauth2.client.registration.github.scope=read:user,user:email"
 })
 class SecurityConfigTest {
 
@@ -77,6 +81,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
+
+    @MockitoBean
+    private GitHubOAuth2UserService gitHubOAuth2UserService;
 
     @Test
     void unauthenticatedRequestToNonPublicRouteReturns401ProblemJson() throws Exception {
@@ -114,6 +121,19 @@ class SecurityConfigTest {
     @Test
     void oauth2AuthorizationPathIsNotBlockedBySecurityFilter() throws Exception {
         mockMvc.perform(get("/oauth2/authorization/google"))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    org.assertj.core.api.Assertions.assertThat(status).isNotIn(401, 403);
+                });
+    }
+
+    /**
+     * Mismo criterio que el test de Google (Story 2.1), ahora para GitHub
+     * (Story 2.2) — `/oauth2/**` ya era agnóstico del `registrationId`.
+     */
+    @Test
+    void gitHubOauth2AuthorizationPathIsNotBlockedBySecurityFilter() throws Exception {
+        mockMvc.perform(get("/oauth2/authorization/github"))
                 .andExpect(result -> {
                     int status = result.getResponse().getStatus();
                     org.assertj.core.api.Assertions.assertThat(status).isNotIn(401, 403);

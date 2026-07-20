@@ -14,6 +14,7 @@ import com.auth_service.auth.domain.model.FederatedProvider;
 import com.auth_service.auth.domain.model.HashedPassword;
 import com.auth_service.auth.domain.model.Role;
 import com.auth_service.auth.infrastructure.adapters.oauth.CookieOAuth2AuthorizationRequestRepository;
+import com.auth_service.auth.infrastructure.adapters.oauth.GitHubOAuth2UserService;
 import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationFailureHandler;
 import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationSuccessHandler;
 import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
@@ -80,6 +81,9 @@ class UserControllerTest {
 
     @MockitoBean
     private OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
+
+    @MockitoBean
+    private GitHubOAuth2UserService gitHubOAuth2UserService;
 
     @MockitoBean
     private GetOwnProfileUseCase getOwnProfileUseCase;

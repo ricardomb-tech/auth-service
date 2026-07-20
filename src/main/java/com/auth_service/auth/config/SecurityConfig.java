@@ -1,6 +1,7 @@
 package com.auth_service.auth.config;
 
 import com.auth_service.auth.infrastructure.adapters.oauth.CookieOAuth2AuthorizationRequestRepository;
+import com.auth_service.auth.infrastructure.adapters.oauth.GitHubOAuth2UserService;
 import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationFailureHandler;
 import com.auth_service.auth.infrastructure.adapters.oauth.OAuth2AuthenticationSuccessHandler;
 import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
@@ -60,16 +61,19 @@ public class SecurityConfig {
     private final CookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
     private final OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
+    private final GitHubOAuth2UserService gitHubOAuth2UserService;
 
     public SecurityConfig(ObjectMapper objectMapper, JwtAuthenticationFilter jwtAuthenticationFilter,
                            CookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository,
                            OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
-                           OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler) {
+                           OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler,
+                           GitHubOAuth2UserService gitHubOAuth2UserService) {
         this.objectMapper = objectMapper;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.cookieAuthorizationRequestRepository = cookieAuthorizationRequestRepository;
         this.oAuth2AuthenticationSuccessHandler = oAuth2AuthenticationSuccessHandler;
         this.oAuth2AuthenticationFailureHandler = oAuth2AuthenticationFailureHandler;
+        this.gitHubOAuth2UserService = gitHubOAuth2UserService;
     }
 
     @Bean
@@ -89,6 +93,10 @@ public class SecurityConfig {
                 // STATELESS (AD-3); los handlers delegan en FederatedLoginUseCase.
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(endpoint -> endpoint.authorizationRequestRepository(cookieAuthorizationRequestRepository))
+                        // Story 2.2 — solo afecta el flujo no-OIDC (GitHub); el
+                        // flujo OIDC de Google (oidcUserService, no tocado) sigue
+                        // exactamente igual.
+                        .userInfoEndpoint(endpoint -> endpoint.userService(gitHubOAuth2UserService))
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                         .failureHandler(oAuth2AuthenticationFailureHandler));
 
