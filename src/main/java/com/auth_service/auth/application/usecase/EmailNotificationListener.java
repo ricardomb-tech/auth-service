@@ -42,4 +42,14 @@ public class EmailNotificationListener {
                     event.recipient(), ex);
         }
     }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAccountLockedEmailRequested(AccountLockedEmailRequested event) {
+        try {
+            emailSender.sendAccountLockedEmail(event.recipient(), event.lockedUntil());
+        } catch (RuntimeException ex) {
+            log.error("Fallo al enviar email de bloqueo por fuerza bruta a accountEmail={} (no afecta la transacción ya confirmada)",
+                    event.recipient(), ex);
+        }
+    }
 }

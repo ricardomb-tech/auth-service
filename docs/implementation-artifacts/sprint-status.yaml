@@ -47,7 +47,7 @@
 # no se bloquean entre sí, pueden intercalarse una vez Epic 4 esté listo).
 
 generated: 2026-07-01
-last_updated: 2026-07-20 # 3-1-recuperacion-de-contrasena → done (code-review: 6 patches aplicados, mvn verify en verde)
+last_updated: 2026-07-21 # 4-1-aprovisionamiento-del-primer-administrador → done (code-review: 6 patches aplicados, 2 decision-needed resueltas, mvn test en verde)
 project: auth-service
 project_key: NOKEY
 tracking_system: file-system
@@ -71,11 +71,11 @@ development_status:
 
   epic-3: in-progress
   3-1-recuperacion-de-contrasena: done
-  3-2-bloqueo-automatico-por-fuerza-bruta: backlog
+  3-2-bloqueo-automatico-por-fuerza-bruta: done
   epic-3-retrospective: optional
 
-  epic-4: backlog
-  4-1-aprovisionamiento-del-primer-administrador: backlog
+  epic-4: in-progress
+  4-1-aprovisionamiento-del-primer-administrador: done
   4-2-gestion-administrativa-de-cuentas-con-auditoria: backlog
   4-3-consulta-del-registro-de-auditoria: backlog
   epic-4-retrospective: optional

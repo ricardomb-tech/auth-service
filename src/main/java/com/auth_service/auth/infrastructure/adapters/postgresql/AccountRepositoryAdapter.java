@@ -5,6 +5,7 @@ import com.auth_service.auth.domain.model.AccountId;
 import com.auth_service.auth.domain.model.AccountStatus;
 import com.auth_service.auth.domain.model.Email;
 import com.auth_service.auth.domain.model.HashedPassword;
+import com.auth_service.auth.domain.model.Role;
 import com.auth_service.auth.domain.port.AccountRepository;
 import org.springframework.stereotype.Component;
 
@@ -34,6 +35,11 @@ public class AccountRepositoryAdapter implements AccountRepository {
     @Override
     public Optional<Account> findById(AccountId id) {
         return jpaRepository.findById(id.value()).map(this::toDomain);
+    }
+
+    @Override
+    public boolean existsByRole(Role role) {
+        return jpaRepository.existsByRolesContaining(role);
     }
 
     private AccountEntity toEntity(Account account) {

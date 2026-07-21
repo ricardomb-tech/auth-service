@@ -71,7 +71,20 @@ public class RefreshTokenUseCase {
         // quemarse sin emitir par nuevo — revisión de la Story 1.5, ver Review
         // Findings.
         Optional<Account> account = accountRepository.findById(token.accountId());
-        if (account.isEmpty() || account.get().status() != AccountStatus.ACTIVE) {
+        if (account.isEmpty()) {
+            throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE);
+        }
+
+        // Auto-desbloqueo (Review Findings, Story 4.1 — mismo criterio que
+        // LoginUseCase/FederatedLoginUseCase): sin esto, un refresh token
+        // vigente emitido antes de un bloqueo por fuerza bruta quedaría
+        // rechazado para siempre tras expirar el bloqueo, si el titular no
+        // vuelve a pasar por /auth/login.
+        if (account.get().unlockIfExpired(now)) {
+            accountRepository.save(account.get());
+        }
+
+        if (account.get().status() != AccountStatus.ACTIVE) {
             throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE);
         }
 

@@ -181,6 +181,49 @@ class RefreshTokenUseCaseTest {
     }
 
     @Test
+    void expiredLockAutoUnlocksBeforeStatusCheckAndAllowsRefresh() {
+        // Review Findings (Story 4.1): sin esto, un refresh token vigente
+        // emitido antes de un bloqueo por fuerza bruta quedaría rechazado
+        // para siempre tras expirar el bloqueo si el titular no vuelve a
+        // pasar por /auth/login.
+        AccountId accountId = AccountId.newId();
+        UUID familyId = UUID.randomUUID();
+        RefreshToken token = tokenWith(accountId, familyId, NOW.plusSeconds(3600), null, null);
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+        Account lockedAccount = Account.reconstitute(accountId, new Email("titular@example.com"), new HashedPassword("bcrypt-hash"),
+                AccountStatus.LOCKED, Set.of(Role.USER), 5, NOW.minusSeconds(1), Instant.now());
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(lockedAccount));
+        when(refreshTokenRepository.markUsedIfUnused(eq(token.id()), any())).thenReturn(1);
+        TokenIssuer.IssuedTokens issuedTokens = new TokenIssuer.IssuedTokens("access", "refresh", 900L);
+        when(tokenIssuer.issue(lockedAccount, familyId)).thenReturn(issuedTokens);
+
+        TokenIssuer.IssuedTokens result = useCase.refresh(new RefreshCommand(RAW_TOKEN));
+
+        assertThat(result).isEqualTo(issuedTokens);
+        assertThat(lockedAccount.status()).isEqualTo(AccountStatus.ACTIVE);
+        verify(accountRepository).save(lockedAccount);
+    }
+
+    @Test
+    void stillLockedAccountThrowsWithoutUnlockingOrConsumingTheToken() {
+        AccountId accountId = AccountId.newId();
+        UUID familyId = UUID.randomUUID();
+        RefreshToken token = tokenWith(accountId, familyId, NOW.plusSeconds(3600), null, null);
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+        Account lockedAccount = Account.reconstitute(accountId, new Email("titular@example.com"), new HashedPassword("bcrypt-hash"),
+                AccountStatus.LOCKED, Set.of(Role.USER), 5, NOW.plusSeconds(600), Instant.now());
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(lockedAccount));
+
+        assertThatThrownBy(() -> useCase.refresh(new RefreshCommand(RAW_TOKEN)))
+                .isInstanceOf(InvalidRefreshTokenException.class);
+
+        assertThat(lockedAccount.status()).isEqualTo(AccountStatus.LOCKED);
+        verify(accountRepository, never()).save(any());
+        verify(refreshTokenRepository, never()).markUsedIfUnused(any(), any());
+        verify(tokenIssuer, never()).issue(any(), any());
+    }
+
+    @Test
     void missingAccountThrowsWithoutConsumingTheTokenOrIssuingNewTokens() {
         AccountId accountId = AccountId.newId();
         UUID familyId = UUID.randomUUID();

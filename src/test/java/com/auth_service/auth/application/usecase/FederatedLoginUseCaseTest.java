@@ -133,6 +133,50 @@ class FederatedLoginUseCaseTest {
         verify(tokenIssuer, never()).issue(any());
     }
 
+    @Test
+    void expiredLockOnLinkedAccountAutoUnlocksBeforeStatusCheckAndAllowsLogin() {
+        // Review Findings (Story 4.1): sin esto, una Cuenta bloqueada por
+        // fuerza bruta cuyo titular solo usa login federado quedaría
+        // rechazada para siempre tras expirar el bloqueo.
+        AccountId accountId = AccountId.newId();
+        Account lockedAccount = Account.reconstitute(accountId, new Email("recurrente@example.com"),
+                new HashedPassword("$2a$10$irrelevantIrrelevantIrrelevantIrrelevantIrrelevantIrre"),
+                AccountStatus.LOCKED, Set.of(Role.USER), 5, Instant.now(clock).minusSeconds(1), Instant.now(clock));
+        FederatedIdentity identity = FederatedIdentity.reconstitute(
+                java.util.UUID.randomUUID(), accountId, FederatedProvider.GOOGLE, "google-sub-6", Instant.now(clock));
+        FederatedLoginCommand command = new FederatedLoginCommand("google", "google-sub-6", "recurrente@example.com", true);
+        when(federatedIdentityRepository.findByProviderAndProviderUserId(FederatedProvider.GOOGLE, "google-sub-6"))
+                .thenReturn(Optional.of(identity));
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(lockedAccount));
+        when(tokenIssuer.issue(any())).thenReturn(ISSUED_TOKENS);
+
+        TokenIssuer.IssuedTokens result = useCase.login(command);
+
+        assertThat(result).isEqualTo(ISSUED_TOKENS);
+        assertThat(lockedAccount.status()).isEqualTo(AccountStatus.ACTIVE);
+        verify(accountRepository).save(lockedAccount);
+    }
+
+    @Test
+    void stillLockedAccountOnLinkedIdentityIsRejectedWithoutUnlocking() {
+        AccountId accountId = AccountId.newId();
+        Account lockedAccount = Account.reconstitute(accountId, new Email("recurrente@example.com"),
+                new HashedPassword("$2a$10$irrelevantIrrelevantIrrelevantIrrelevantIrrelevantIrre"),
+                AccountStatus.LOCKED, Set.of(Role.USER), 5, Instant.now(clock).plusSeconds(600), Instant.now(clock));
+        FederatedIdentity identity = FederatedIdentity.reconstitute(
+                java.util.UUID.randomUUID(), accountId, FederatedProvider.GOOGLE, "google-sub-7", Instant.now(clock));
+        FederatedLoginCommand command = new FederatedLoginCommand("google", "google-sub-7", "recurrente@example.com", true);
+        when(federatedIdentityRepository.findByProviderAndProviderUserId(FederatedProvider.GOOGLE, "google-sub-7"))
+                .thenReturn(Optional.of(identity));
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(lockedAccount));
+
+        assertThatThrownBy(() -> useCase.login(command)).isInstanceOf(FederatedLoginFailedException.class);
+
+        assertThat(lockedAccount.status()).isEqualTo(AccountStatus.LOCKED);
+        verify(accountRepository, never()).save(any());
+        verify(tokenIssuer, never()).issue(any());
+    }
+
     private Account accountWith(AccountId id, String email) {
         HashedPassword hashedPassword = new HashedPassword("$2a$10$irrelevantIrrelevantIrrelevantIrrelevantIrrelevantIrre");
         return Account.reconstitute(id, new Email(email), hashedPassword, AccountStatus.ACTIVE, Set.of(Role.USER), 0, null,

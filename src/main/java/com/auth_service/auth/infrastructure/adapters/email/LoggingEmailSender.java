@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+
 /**
  * Adapter de desarrollo — loggea el enlace en vez de enviarlo por SMTP real
  * (AD-9). El proveedor SMTP de producción es la pregunta abierta 1 del PRD;
@@ -40,5 +42,11 @@ public class LoggingEmailSender implements EmailSender {
     public void sendPasswordResetEmail(Email recipient, String rawToken) {
         String link = appBaseUrl + "/auth/reset-password?token=" + rawToken;
         log.info("[dev] Email de recuperación de contraseña para {} -> {}", recipient.value(), link);
+    }
+
+    @Override
+    public void sendAccountLockedEmail(Email recipient, Instant lockedUntil) {
+        log.info("[dev] Email de bloqueo por fuerza bruta para {} -> desbloqueo automático a las {}",
+                recipient.value(), lockedUntil);
     }
 }

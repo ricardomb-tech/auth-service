@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -78,6 +79,15 @@ public class FederatedLoginUseCase {
             }
             FederatedIdentity identity = FederatedIdentity.link(account.id(), provider, command.providerUserId(), clock);
             federatedIdentityRepository.save(identity);
+        }
+
+        // Auto-desbloqueo (Review Findings, Story 4.1 — mismo criterio que
+        // LoginUseCase): sin esto, una Cuenta cuyo bloqueo por fuerza bruta ya
+        // expiró quedaría rechazada para siempre por este camino si su
+        // titular solo usa login federado y nunca pasa por /auth/login (que
+        // es el único otro sitio que llama unlockIfExpired).
+        if (account.unlockIfExpired(Instant.now(clock))) {
+            accountRepository.save(account);
         }
 
         // Sin este chequeo, una Cuenta LOCKED (bloqueada por fuerza bruta) o

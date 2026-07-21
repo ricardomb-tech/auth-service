@@ -2,6 +2,7 @@ package com.auth_service.auth.domain.model;
 
 import com.auth_service.auth.domain.exception.DomainValidationException;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
@@ -53,6 +54,24 @@ public class Account {
         return new Account(AccountId.newId(), email, null, AccountStatus.ACTIVE, roles, 0, null, Instant.now());
     }
 
+    /**
+     * Nace ACTIVE con Roles ADMIN+USER, sin verificación de email — FR-12
+     * (Story 4.1, aprovisionamiento del primer Administrador). A diferencia
+     * de {@link #register} (PENDING_VERIFICATION, solo USER) y
+     * {@link #registerFederated} (ACTIVE, solo USER), esta Cuenta nace ya
+     * operativa con ambos roles porque el operador que define
+     * AUTH_ADMIN_EMAIL/AUTH_ADMIN_PASSWORD ya controla el arranque del
+     * proceso — no hay titular externo que verificar. Se invoca únicamente
+     * desde el aprovisionamiento en el arranque (config/), nunca desde un
+     * endpoint público.
+     */
+    public static Account registerAdmin(Email email, HashedPassword passwordHash) {
+        Set<Role> roles = new HashSet<>();
+        roles.add(Role.ADMIN);
+        roles.add(Role.USER);
+        return new Account(AccountId.newId(), email, passwordHash, AccountStatus.ACTIVE, roles, 0, null, Instant.now());
+    }
+
     /** Reconstruye una Cuenta ya persistida — usado por el adapter de persistencia. */
     public static Account reconstitute(AccountId id, Email email, HashedPassword passwordHash, AccountStatus status,
                                         Set<Role> roles, int failedAttempts, Instant lockedUntil, Instant createdAt) {
@@ -79,6 +98,47 @@ public class Account {
      */
     public void changePassword(HashedPassword newPasswordHash) {
         this.passwordHash = newPasswordHash;
+    }
+
+    /**
+     * Intento de login fallido contra esta Cuenta (Story 3.2, FR-8). Solo
+     * incrementa y evalúa el umbral si la Cuenta está ACTIVE — AD-6 solo
+     * permite la transición ACTIVE ⇄ LOCKED, nunca desde otro estado.
+     * Devuelve true si este intento produjo el bloqueo (para que el caso de
+     * uso decida si notificar por email — una sola vez, no en cada intento
+     * posterior mientras ya está LOCKED).
+     */
+    public boolean recordFailedLoginAttempt(int lockoutThreshold, Duration lockoutDuration, Instant now) {
+        if (status != AccountStatus.ACTIVE) {
+            return false;
+        }
+        failedAttempts++;
+        if (failedAttempts >= lockoutThreshold) {
+            status = AccountStatus.LOCKED;
+            lockedUntil = now.plus(lockoutDuration);
+            return true;
+        }
+        return false;
+    }
+
+    /** Login exitoso (Story 3.2, FR-8) — reinicia el contador. */
+    public void recordSuccessfulLogin() {
+        this.failedAttempts = 0;
+    }
+
+    /**
+     * Auto-desbloqueo (Story 3.2, FR-9) — transición LOCKED → ACTIVE solo si
+     * el bloqueo ya expiró (AD-6). Devuelve true si desbloqueó, para que el
+     * caso de uso decida si persistir el cambio.
+     */
+    public boolean unlockIfExpired(Instant now) {
+        if (status == AccountStatus.LOCKED && lockedUntil != null && !now.isBefore(lockedUntil)) {
+            status = AccountStatus.ACTIVE;
+            lockedUntil = null;
+            failedAttempts = 0;
+            return true;
+        }
+        return false;
     }
 
     public AccountId id() {
