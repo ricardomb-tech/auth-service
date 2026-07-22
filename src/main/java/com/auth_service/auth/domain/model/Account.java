@@ -141,6 +141,44 @@ public class Account {
         return false;
     }
 
+    /**
+     * Desactivación administrativa (Story 4.2, FR-11) — transición
+     * {@code * → DISABLED} (AD-6: cualquier estado salvo ya DISABLED).
+     * Quién puede invocarla y sobre quién es responsabilidad exclusiva de
+     * {@code ManageAccountUseCase} (auto-protección, AC #4) — este método
+     * solo aplica la transición si es válida.
+     */
+    public void disable() {
+        if (status == AccountStatus.DISABLED) {
+            throw new DomainValidationException("La Cuenta ya está desactivada.");
+        }
+        this.status = AccountStatus.DISABLED;
+    }
+
+    /** Reactivación administrativa (Story 4.2, FR-11) — transición DISABLED → ACTIVE únicamente. */
+    public void reactivate() {
+        if (status != AccountStatus.DISABLED) {
+            throw new DomainValidationException("Solo una Cuenta desactivada puede reactivarse.");
+        }
+        this.status = AccountStatus.ACTIVE;
+    }
+
+    /**
+     * Reemplaza el conjunto de Roles (Story 4.2, FR-11). Debe quedar al
+     * menos un Rol — una Cuenta sin ningún Rol es un estado inválido que
+     * ningún flujo del sistema sabe interpretar. La regla de "un Admin no
+     * puede quitarse ADMIN a sí mismo" (AC #4) NO vive aquí — depende de
+     * quién es el actor, algo que este objeto no conoce (AD-6); la decide
+     * {@code ManageAccountUseCase} antes de invocar este método.
+     */
+    public void updateRoles(Set<Role> newRoles) {
+        if (newRoles == null || newRoles.isEmpty()) {
+            throw new DomainValidationException("Una Cuenta debe tener al menos un Rol.");
+        }
+        this.roles.clear();
+        this.roles.addAll(newRoles);
+    }
+
     public AccountId id() {
         return id;
     }

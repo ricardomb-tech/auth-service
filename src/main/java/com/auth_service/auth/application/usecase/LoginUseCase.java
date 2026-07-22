@@ -1,5 +1,8 @@
 package com.auth_service.auth.application.usecase;
 
+import com.auth_service.auth.application.usecase.command.LoginCommand;
+
+import com.auth_service.auth.application.event.AccountLockedEmailRequested;
 import com.auth_service.auth.config.LockoutProperties;
 import com.auth_service.auth.domain.exception.AuthenticationFailedException;
 import com.auth_service.auth.domain.exception.DomainValidationException;

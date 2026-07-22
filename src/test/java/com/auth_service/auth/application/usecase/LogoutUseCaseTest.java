@@ -1,5 +1,7 @@
 package com.auth_service.auth.application.usecase;
 
+import com.auth_service.auth.application.usecase.command.LogoutCommand;
+
 import com.auth_service.auth.domain.model.AccountId;
 import com.auth_service.auth.domain.model.RefreshToken;
 import com.auth_service.auth.domain.port.RefreshTokenRepository;

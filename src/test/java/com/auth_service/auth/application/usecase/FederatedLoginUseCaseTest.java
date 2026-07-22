@@ -1,5 +1,7 @@
 package com.auth_service.auth.application.usecase;
 
+import com.auth_service.auth.application.usecase.command.FederatedLoginCommand;
+
 import com.auth_service.auth.domain.exception.FederatedLoginFailedException;
 import com.auth_service.auth.domain.model.Account;
 import com.auth_service.auth.domain.model.AccountId;

@@ -1,4 +1,4 @@
-package com.auth_service.auth.application.usecase;
+package com.auth_service.auth.application.usecase.result;
 
 public enum ProvisionInitialAdminResult {
     ADMIN_CREATED,

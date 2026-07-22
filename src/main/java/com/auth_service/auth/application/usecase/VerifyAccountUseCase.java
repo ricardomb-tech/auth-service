@@ -1,5 +1,7 @@
 package com.auth_service.auth.application.usecase;
 
+import com.auth_service.auth.application.usecase.command.VerifyCommand;
+
 import com.auth_service.auth.domain.exception.DomainValidationException;
 import com.auth_service.auth.domain.model.Account;
 import com.auth_service.auth.domain.model.VerificationPurpose;

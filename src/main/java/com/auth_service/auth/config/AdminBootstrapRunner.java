@@ -1,6 +1,6 @@
 package com.auth_service.auth.config;
 
-import com.auth_service.auth.application.usecase.ProvisionInitialAdminResult;
+import com.auth_service.auth.application.usecase.result.ProvisionInitialAdminResult;
 import com.auth_service.auth.application.usecase.ProvisionInitialAdminUseCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

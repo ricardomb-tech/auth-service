@@ -1,5 +1,10 @@
 package com.auth_service.auth.application.usecase;
 
+import com.auth_service.auth.application.usecase.result.RegisterAccountResult;
+
+import com.auth_service.auth.application.usecase.command.RegisterAccountCommand;
+
+import com.auth_service.auth.application.event.VerificationEmailRequested;
 import com.auth_service.auth.config.AuthTokenProperties;
 import com.auth_service.auth.domain.model.Account;
 import com.auth_service.auth.domain.model.Email;

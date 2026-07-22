@@ -7,8 +7,11 @@ import com.auth_service.auth.domain.model.Email;
 import com.auth_service.auth.domain.model.HashedPassword;
 import com.auth_service.auth.domain.model.Role;
 import com.auth_service.auth.domain.port.AccountRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -40,6 +43,19 @@ public class AccountRepositoryAdapter implements AccountRepository {
     @Override
     public boolean existsByRole(Role role) {
         return jpaRepository.existsByRolesContaining(role);
+    }
+
+    @Override
+    public List<Account> findAllPaged(int page, int size) {
+        Sort deterministicOrder = Sort.by(Sort.Order.asc("createdAt"), Sort.Order.asc("id"));
+        return jpaRepository.findAll(PageRequest.of(page, size, deterministicOrder))
+                .map(this::toDomain)
+                .getContent();
+    }
+
+    @Override
+    public long countAll() {
+        return jpaRepository.count();
     }
 
     private AccountEntity toEntity(Account account) {

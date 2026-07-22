@@ -240,4 +240,74 @@ class AccountTest {
         assertThat(unlocked).isFalse();
         assertThat(account.status()).isEqualTo(status);
     }
+
+    @Test
+    void disableTransitionsActiveAccountToDisabled() {
+        Account account = Account.reconstitute(
+                AccountId.newId(), new Email("titular@example.com"), new HashedPassword("hash"),
+                AccountStatus.ACTIVE, Set.of(Role.USER), 0, null, Instant.now());
+
+        account.disable();
+
+        assertThat(account.status()).isEqualTo(AccountStatus.DISABLED);
+    }
+
+    @Test
+    void disableOnAlreadyDisabledAccountThrowsDomainValidationException() {
+        Account account = Account.reconstitute(
+                AccountId.newId(), new Email("titular@example.com"), new HashedPassword("hash"),
+                AccountStatus.DISABLED, Set.of(Role.USER), 0, null, Instant.now());
+
+        assertThatThrownBy(account::disable).isInstanceOf(DomainValidationException.class);
+    }
+
+    @Test
+    void reactivateTransitionsDisabledAccountToActive() {
+        Account account = Account.reconstitute(
+                AccountId.newId(), new Email("titular@example.com"), new HashedPassword("hash"),
+                AccountStatus.DISABLED, Set.of(Role.USER), 0, null, Instant.now());
+
+        account.reactivate();
+
+        assertThat(account.status()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = AccountStatus.class, names = {"PENDING_VERIFICATION", "ACTIVE", "LOCKED"})
+    void reactivateOnNonDisabledAccountThrowsDomainValidationException(AccountStatus status) {
+        Account account = Account.reconstitute(
+                AccountId.newId(), new Email("titular@example.com"), new HashedPassword("hash"),
+                status, Set.of(Role.USER), 0, null, Instant.now());
+
+        assertThatThrownBy(account::reactivate).isInstanceOf(DomainValidationException.class);
+    }
+
+    @Test
+    void updateRolesReplacesRoleSet() {
+        Account account = Account.reconstitute(
+                AccountId.newId(), new Email("titular@example.com"), new HashedPassword("hash"),
+                AccountStatus.ACTIVE, Set.of(Role.USER), 0, null, Instant.now());
+
+        account.updateRoles(Set.of(Role.ADMIN, Role.USER));
+
+        assertThat(account.roles()).containsExactlyInAnyOrder(Role.ADMIN, Role.USER);
+    }
+
+    @Test
+    void updateRolesWithEmptySetThrowsDomainValidationException() {
+        Account account = Account.reconstitute(
+                AccountId.newId(), new Email("titular@example.com"), new HashedPassword("hash"),
+                AccountStatus.ACTIVE, Set.of(Role.USER), 0, null, Instant.now());
+
+        assertThatThrownBy(() -> account.updateRoles(Set.of())).isInstanceOf(DomainValidationException.class);
+    }
+
+    @Test
+    void updateRolesWithNullThrowsDomainValidationException() {
+        Account account = Account.reconstitute(
+                AccountId.newId(), new Email("titular@example.com"), new HashedPassword("hash"),
+                AccountStatus.ACTIVE, Set.of(Role.USER), 0, null, Instant.now());
+
+        assertThatThrownBy(() -> account.updateRoles(null)).isInstanceOf(DomainValidationException.class);
+    }
 }

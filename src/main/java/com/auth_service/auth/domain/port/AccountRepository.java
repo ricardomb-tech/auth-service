@@ -5,6 +5,7 @@ import com.auth_service.auth.domain.model.AccountId;
 import com.auth_service.auth.domain.model.Email;
 import com.auth_service.auth.domain.model.Role;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface AccountRepository {
@@ -16,4 +17,8 @@ public interface AccountRepository {
     Optional<Account> findById(AccountId id);
 
     boolean existsByRole(Role role);
+
+    List<Account> findAllPaged(int page, int size);
+
+    long countAll();
 }

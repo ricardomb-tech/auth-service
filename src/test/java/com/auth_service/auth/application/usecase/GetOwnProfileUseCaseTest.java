@@ -1,5 +1,7 @@
 package com.auth_service.auth.application.usecase;
 
+import com.auth_service.auth.application.usecase.command.GetOwnProfileCommand;
+
 import com.auth_service.auth.domain.exception.AccountNotFoundException;
 import com.auth_service.auth.domain.model.Account;
 import com.auth_service.auth.domain.model.AccountId;

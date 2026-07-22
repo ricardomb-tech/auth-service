@@ -1,4 +1,4 @@
-package com.auth_service.auth.application.usecase;
+package com.auth_service.auth.application.event;
 
 import com.auth_service.auth.domain.model.Email;
 

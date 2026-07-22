@@ -1,6 +1,6 @@
 package com.auth_service.auth.infrastructure.controller;
 
-import com.auth_service.auth.application.usecase.GetOwnProfileCommand;
+import com.auth_service.auth.application.usecase.command.GetOwnProfileCommand;
 import com.auth_service.auth.application.usecase.GetOwnProfileUseCase;
 import com.auth_service.auth.domain.exception.AccountNotFoundException;
 import com.auth_service.auth.domain.model.Account;

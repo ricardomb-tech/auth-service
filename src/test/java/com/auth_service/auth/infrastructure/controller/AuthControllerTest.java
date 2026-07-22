@@ -1,12 +1,12 @@
 package com.auth_service.auth.infrastructure.controller;
 
 import com.auth_service.auth.application.usecase.LoginUseCase;
-import com.auth_service.auth.application.usecase.LogoutCommand;
+import com.auth_service.auth.application.usecase.command.LogoutCommand;
 import com.auth_service.auth.application.usecase.LogoutUseCase;
-import com.auth_service.auth.application.usecase.OAuth2ExchangeCommand;
+import com.auth_service.auth.application.usecase.command.OAuth2ExchangeCommand;
 import com.auth_service.auth.application.usecase.OAuth2ExchangeUseCase;
 import com.auth_service.auth.application.usecase.RefreshTokenUseCase;
-import com.auth_service.auth.application.usecase.RegisterAccountResult;
+import com.auth_service.auth.application.usecase.result.RegisterAccountResult;
 import com.auth_service.auth.application.usecase.RegisterAccountUseCase;
 import com.auth_service.auth.application.usecase.RequestPasswordResetUseCase;
 import com.auth_service.auth.application.usecase.ResendVerificationUseCase;

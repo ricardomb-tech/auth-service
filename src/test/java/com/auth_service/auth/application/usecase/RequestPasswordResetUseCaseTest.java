@@ -1,5 +1,8 @@
 package com.auth_service.auth.application.usecase;
 
+import com.auth_service.auth.application.usecase.command.RequestPasswordResetCommand;
+
+import com.auth_service.auth.application.event.PasswordResetEmailRequested;
 import com.auth_service.auth.config.AuthTokenProperties;
 import com.auth_service.auth.domain.model.Account;
 import com.auth_service.auth.domain.model.Email;

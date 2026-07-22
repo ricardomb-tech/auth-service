@@ -1,4 +1,4 @@
-package com.auth_service.auth.application.usecase;
+package com.auth_service.auth.application.usecase.result;
 
 /**
  * Uso interno (logging/tests) — el controller NUNCA expone cuál de estos dos

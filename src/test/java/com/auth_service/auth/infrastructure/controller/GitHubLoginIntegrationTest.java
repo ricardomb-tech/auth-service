@@ -1,6 +1,6 @@
 package com.auth_service.auth.infrastructure.controller;
 
-import com.auth_service.auth.application.usecase.FederatedLoginCommand;
+import com.auth_service.auth.application.usecase.command.FederatedLoginCommand;
 import com.auth_service.auth.application.usecase.FederatedLoginUseCase;
 import com.auth_service.auth.application.usecase.TokenIssuer;
 import com.auth_service.auth.domain.model.Account;

@@ -1,5 +1,7 @@
 package com.auth_service.auth.application.usecase;
 
+import com.auth_service.auth.application.usecase.command.OAuth2ExchangeCommand;
+
 import com.auth_service.auth.domain.exception.OAuth2ExchangeFailedException;
 import com.auth_service.auth.domain.port.OAuth2ExchangeCodeStore;
 import org.springframework.stereotype.Service;
