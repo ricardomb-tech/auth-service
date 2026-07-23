@@ -8,6 +8,8 @@ import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationF
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -19,6 +21,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import java.io.IOException;
 
@@ -76,6 +79,56 @@ public class SecurityConfig {
         this.oAuth2AuthenticationSuccessHandler = oAuth2AuthenticationSuccessHandler;
         this.oAuth2AuthenticationFailureHandler = oAuth2AuthenticationFailureHandler;
         this.gitHubOAuth2UserService = gitHubOAuth2UserService;
+    }
+
+    /**
+     * Cadena de seguridad dedicada al puerto de management (Story 5.1,
+     * AD-16). Cuando {@code management.server.port} difiere de
+     * {@code server.port}, Spring Boot arranca un contexto hijo para
+     * Actuator que sigue viendo los beans {@link SecurityFilterChain} del
+     * contexto padre — sin esta cadena adicional, el único
+     * {@code SecurityFilterChain} existente (el de negocio, deny-all) pasa
+     * a aplicarse también a las peticiones del puerto de management,
+     * devolviendo 401. {@code @Order(HIGHEST_PRECEDENCE)} le da prioridad
+     * de coincidencia sobre {@link #securityFilterChain}: cualquier ruta
+     * bajo {@code /actuator/**} usa esta cadena (permitAll) en vez de la de
+     * negocio, sin tocar {@link #PUBLIC_ENDPOINTS} — AD-11 exige
+     * explícitamente que {@code /actuator/**} nunca aparezca en esa lista;
+     * el aislamiento es por puerto físico, no por regla de autorización de
+     * negocio. Una petición a {@code /actuator/**} contra el puerto de
+     * negocio pasa esta cadena (permitAll) pero no encuentra ningún
+     * handler ahí (los endpoints de Actuator solo están mapeados en el
+     * contexto hijo del puerto de management) y recibe 404, no 401.
+     *
+     * <p><b>{@code securityMatcher("/actuator/**")} en vez de
+     * {@code EndpointRequest.toAnyEndpoint()}:</b> ese matcher de
+     * conveniencia de Actuator resuelve el conjunto de endpoints contra el
+     * {@code PathMappedEndpoints} del contexto donde se evalúa la petición
+     * — en pruebas con contexto hijo de management, esa resolución fue
+     * inconsistente entre endpoints (funcionó para {@code health/*},
+     * falló para {@code prometheus}). Un matcher de ruta literal no
+     * depende de esa introspección y cubre todo {@code /actuator/**} de
+     * forma uniforme.</p>
+     *
+     * <p><b>{@link AntPathRequestMatcher} explícito, no el overload
+     * {@code securityMatcher(String...)}:</b> ese overload intenta resolver
+     * un {@code MvcRequestMatcher}, que requiere el bean
+     * {@code mvcHandlerMappingIntrospector} — ausente en cualquier test que
+     * arranque el contexto con {@code spring.main.web-application-type=none}
+     * (p. ej. {@code RefreshTokenRepositoryAdapterTest}), rompiendo la carga
+     * del contexto para TODA la suite, no solo los tests de Actuator.
+     * {@code AntPathRequestMatcher} es un matcher de ruta plano, sin
+     * dependencia de infraestructura de Spring MVC.</p>
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher(new AntPathRequestMatcher("/actuator/**"))
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+        return http.build();
     }
 
     @Bean

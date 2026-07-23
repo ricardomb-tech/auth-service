@@ -47,7 +47,7 @@
 # no se bloquean entre sí, pueden intercalarse una vez Epic 4 esté listo).
 
 generated: 2026-07-01
-last_updated: 2026-07-22 # 4-3-consulta-del-registro-de-auditoria → done (code-review: 2 patch aplicados, 8 defer, 4 dismissed)
+last_updated: 2026-07-22 # 5-1-salud-metricas-y-trazas-distribuidas → review (implementación completa, suite en verde)
 project: auth-service
 project_key: NOKEY
 tracking_system: file-system
@@ -80,8 +80,8 @@ development_status:
   4-3-consulta-del-registro-de-auditoria: done
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-salud-metricas-y-trazas-distribuidas: backlog
+  epic-5: in-progress
+  5-1-salud-metricas-y-trazas-distribuidas: review
   5-2-resiliencia-ante-proveedores-externos: backlog
   epic-5-retrospective: optional
 
