@@ -47,7 +47,7 @@
 # no se bloquean entre sí, pueden intercalarse una vez Epic 4 esté listo).
 
 generated: 2026-07-01
-last_updated: 2026-07-22 # 5-1-salud-metricas-y-trazas-distribuidas → review (implementación completa, suite en verde)
+last_updated: 2026-07-23 # 5-2-resiliencia-ante-proveedores-externos → ready-for-dev (story creada)
 project: auth-service
 project_key: NOKEY
 tracking_system: file-system
@@ -81,8 +81,8 @@ development_status:
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-salud-metricas-y-trazas-distribuidas: review
-  5-2-resiliencia-ante-proveedores-externos: backlog
+  5-1-salud-metricas-y-trazas-distribuidas: done
+  5-2-resiliencia-ante-proveedores-externos: ready-for-dev
   epic-5-retrospective: optional
 
   epic-6: backlog

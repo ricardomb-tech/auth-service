@@ -1,6 +1,8 @@
 package com.auth_service.auth;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -47,6 +49,11 @@ class ActuatorHealthIntegrationTest {
 		String body = restTemplate.getForObject(managementUrl("/actuator/health/readiness"), String.class);
 
 		assertThat(body).contains("\"status\":\"UP\"");
+		// El AC #1 exige explícitamente que readiness incluya el estado de la
+		// conexión a PostgreSQL (components.db) — no basta con el status
+		// agregado, que seguiría en verde aunque el grupo perdiera el
+		// componente "db" de su configuración.
+		assertThat(body).contains("\"db\"");
 	}
 
 	@Test
@@ -68,9 +75,14 @@ class ActuatorHealthIntegrationTest {
 		assertThat(body).contains("http_server_requests_seconds");
 	}
 
-	@Test
-	void actuatorIsNotReachableOnTheBusinessPort() {
-		assertThatThrownBy(() -> restTemplate.getForObject(businessUrl("/actuator/health"), String.class))
+	@ParameterizedTest
+	@ValueSource(strings = {"/actuator/health", "/actuator/prometheus", "/actuator/info", "/actuator"})
+	void actuatorIsNotReachableOnTheBusinessPort(String actuatorPath) {
+		// El AC #1 dice "ninguno de los endpoints de /actuator/** aparece en la
+		// superficie pública de negocio" — se verifica sobre varias rutas
+		// representativas, no solo /actuator/health, para no dar por sentado
+		// que el 404 se generaliza al resto del prefijo.
+		assertThatThrownBy(() -> restTemplate.getForObject(businessUrl(actuatorPath), String.class))
 				.isInstanceOf(HttpClientErrorException.class)
 				.satisfies(ex -> assertThat(((HttpClientErrorException) ex).getStatusCode())
 						.isEqualTo(HttpStatus.NOT_FOUND));

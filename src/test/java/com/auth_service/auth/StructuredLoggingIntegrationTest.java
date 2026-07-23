@@ -6,6 +6,7 @@ import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.OutputStreamAppender;
 import ch.qos.logback.core.encoder.Encoder;
 import ch.qos.logback.core.read.ListAppender;
+import com.auth_service.auth.infrastructure.adapters.security.JwtAuthenticationFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,14 +71,24 @@ class StructuredLoggingIntegrationTest {
 	void httpRequestLogLineIncludesNonBlankTraceId() {
 		callProtectedEndpointWithInvalidToken();
 
-		List<ILoggingEvent> events = listAppender.list;
-		boolean anyEventHasTraceId = events.stream()
+		// Se filtra por el logger de JwtAuthenticationFilter (en vez de aceptar
+		// "cualquier" evento capturado por el root logger) porque ese logger solo
+		// emite en respuesta directa a esta petición — evita que un traceId
+		// residual de un hilo/petición no relacionada (p. ej. un intento fallido
+		// de exportación OTLP en background) pase la aserción por casualidad. El
+		// AC #2 pide el traceId en "cada línea de log asociada a esa petición":
+		// se exige sobre TODAS las líneas de ese logger, no solo sobre alguna.
+		List<String> jwtFilterTraceIds = listAppender.list.stream()
+				.filter(event -> event.getLoggerName().equals(JwtAuthenticationFilter.class.getName()))
 				.map(event -> event.getMDCPropertyMap().get("traceId"))
-				.anyMatch(traceId -> traceId != null && !traceId.isBlank());
+				.toList();
 
-		assertThat(anyEventHasTraceId)
-				.as("al menos una línea de log durante la petición debe tener un traceId no vacío en el MDC")
-				.isTrue();
+		assertThat(jwtFilterTraceIds)
+				.as("JwtAuthenticationFilter debe haber logueado el rechazo del token durante la petición")
+				.isNotEmpty();
+		assertThat(jwtFilterTraceIds)
+				.as("toda línea de log de JwtAuthenticationFilter asociada a la petición debe tener un traceId no vacío en el MDC")
+				.allMatch(traceId -> traceId != null && !traceId.isBlank());
 	}
 
 	@Test

@@ -94,6 +94,11 @@ Items surfaced during code review or implementation that are real but out of sco
 - **Las FK de `audit_log` (`actor_account_id`/`target_account_id` → `accounts.id`) no declaran `ON DELETE`**, por lo que por defecto son `NO ACTION`. Irrelevante hoy porque no existe ningún flujo de borrado físico de cuentas en el sistema; requerirá una decisión (`RESTRICT` explícito vs. otra estrategia) si alguna vez se introduce ese flujo.
 - **Sin índice en `audit_log` para `target_account_id` u `occurred_at`** — la tabla queda con solo el índice de la PK. La próxima historia (4-3-consulta-del-registro-de-auditoria), que consultará esta tabla por esos criterios, tropezará con un problema de rendimiento en cuanto el volumen de filas crezca. Fuera de alcance de esta historia (solo escritura), pero debería resolverse como parte de 4-3 antes de exponer consultas reales.
 
+## Deferred from: code review of story 5-1-salud-metricas-y-trazas-distribuidas (2026-07-23)
+
+- **El exportador OTLP apunta por defecto a `http://localhost:4318` sin ningún colector presente en `docker-compose.yml`** — cada petición intentará (y fallará) exportar una traza en cualquier entorno sin colector real. Ya reconocido explícitamente como `[ASSUMPTION]`/trabajo diferido en los propios Dev Notes de la historia; el volumen de log-noise bajo carga sostenida queda sin verificar.
+- **`consoleOutputIsStructuredJson` no observa el stdout real** — reconstruye la línea reutilizando el `Encoder` del appender `CONSOLE` (cast sin chequear, nombre de appender hardcodeado) porque `ConsoleAppender` cachea su `OutputStream` al arrancar. Compromiso de test ya reconocido explícitamente por el propio dev en el Desvío #6 de esta historia; frágil si cambia el wiring de appenders por defecto de Boot.
+
 ## Deferred from: code review of story 4-3-consulta-del-registro-de-auditoria (2026-07-22)
 
 - **Sin paginación en `GET /api/v1/admin/audit-log`** — sin filtros, devuelve la tabla `audit_log` completa en un único array JSON. Decisión consciente ya documentada como `[ASSUMPTION]` en los Dev Notes de la historia (el FR-13 solo pide "filtros mínimos", no paginación); riesgo real solo si el volumen de filas crece sin que se use ningún filtro.

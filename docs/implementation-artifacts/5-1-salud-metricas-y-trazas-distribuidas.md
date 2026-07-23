@@ -4,7 +4,7 @@ baseline_commit: 07d78351e4e607484477a2b4fc6f0557cb4a278f
 
 # Story 5.1: Salud, Métricas y Trazas Distribuidas
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -94,6 +94,19 @@ so that pueda diagnosticar un incidente sin adivinar. (NFR-11)
   - [x] `./mvnw test` (requiere Docker para Testcontainers) — 0 fallas, 0 errores, sin tocar ningún archivo de Epics 1-4.
   - [x] Confirmar que `docker-compose up` sigue arrancando limpio (no se tocó `docker-compose.yml` en esta historia — el puerto de management es solo de la app Java, no del stack de Docker Compose).
 
+### Review Findings
+
+- [x] [Review][Decision] El diseño delega toda la seguridad del puerto de management en el aislamiento de red, sin ninguna salvaguarda a nivel de código — `actuatorSecurityFilterChain` (`SecurityConfig.java`) da `permitAll()` incondicional a todo `/actuator/**`, y nada en el diff falla rápido si `management.server.port` llegara a coincidir con `server.port` (p. ej. por una variable de entorno mal puesta en producción). Reportado de forma independiente por las 3 capas de revisión. **Resuelto:** se agregó `ManagementPortSafetyCheck` (`src/main/java/com/auth_service/auth/config/ManagementPortSafetyCheck.java`) — falla el arranque con `IllegalStateException` si ambos puertos coinciden (excepto el caso `0`/aleatorio usado en tests), con test unitario dedicado (`ManagementPortSafetyCheckTest`). **No se agregó** `management.server.address=127.0.0.1`: restringir el bind a loopback rompería probes de un orquestador externo que llegue por la IP del pod/contenedor y no por `localhost` (p. ej. Kubernetes kubelet sin `hostNetwork`) — el repo no tiene todavía Dockerfile/manifiesto de despliegue para saber si aplica; queda como decisión a tomar cuando exista esa topología real (ver deferred-work.md).
+- [x] [Review][Decision] `management.tracing.sampling.probability=${TRACING_SAMPLING_PROBABILITY:1.0}` vive en `application.properties` base (no en un perfil `dev`/`test`), así que el 100% de sampling es el default real en producción salvo que un operador recuerde sobreescribir la env var — riesgo latente de latencia/costo frente a NFR-3 (p95 < 500ms) si se olvida. [src/main/resources/application.properties] — **Resuelto: se deja como está.** Ya es overrideable vía `TRACING_SAMPLING_PROBABILITY` y es una decisión consciente y documentada para cumplir la letra del AC #2 ("cada línea de log") en el entorno por defecto.
+
+- [x] [Review][Patch] `httpRequestLogLineIncludesNonBlankTraceId` prueba "al menos una línea tiene traceId", no "cada línea" como pide literalmente el AC #2 — un `traceId` residual de un hilo/petición no relacionada (MDC obsoleto) haría pasar el test igual aunque la propagación real estuviera rota [src/test/java/com/auth_service/auth/StructuredLoggingIntegrationTest.java:70-89] — aplicado: se filtra por el logger de `JwtAuthenticationFilter` (el único que emite en respuesta directa a esta petición) y se exige `allMatch` de traceId no vacío sobre todos sus eventos, no `anyMatch` sobre el root logger completo
+- [x] [Review][Patch] `readinessProbeReturns200WithDbComponentUp` nunca verifica que el componente `db`/`components` esté realmente en el cuerpo de la respuesta, solo el `"status":"UP"` global [src/test/java/com/auth_service/auth/ActuatorHealthIntegrationTest.java:46-53] — aplicado: se agregó `assertThat(body).contains("\"db\"")`
+- [x] [Review][Patch] `actuatorIsNotReachableOnTheBusinessPort` solo verificaba una ruta (`/actuator/health`) contra el puerto de negocio [src/test/java/com/auth_service/auth/ActuatorHealthIntegrationTest.java:72-82] — aplicado: convertido a `@ParameterizedTest` sobre `/actuator/health`, `/actuator/prometheus`, `/actuator/info` y `/actuator`
+- [x] [Review][Patch] Ningún test ejercitaba la rama de PostgreSQL caído (readiness debe reflejar `DOWN`, liveness debe permanecer `UP`) — aplicado: nueva clase `ActuatorHealthDbDownIntegrationTest` (detiene el contenedor de Postgres con `@DirtiesContext(AFTER_CLASS)` para no contaminar la caché de contexto de otras clases); verificado con Docker real: readiness responde 503, liveness sigue en `UP` (49.18s, dominado por el timeout de reconexión de HikariCP)
+
+- [x] [Review][Defer] El exportador OTLP apunta por defecto a `http://localhost:4318` sin ningún colector presente en `docker-compose.yml`; cada petición intentará (y fallará) exportar una traza en cualquier entorno sin colector real — deferred, pre-existing (ya reconocido explícitamente como `[ASSUMPTION]`/trabajo diferido en los propios Dev Notes de esta historia; el volumen de log-noise bajo carga sostenida queda sin verificar)
+- [x] [Review][Defer] `consoleOutputIsStructuredJson` no observa el stdout real — reconstruye la línea reutilizando el `Encoder` del appender `CONSOLE` (cast sin chequear, nombre de appender hardcodeado) porque `ConsoleAppender` cachea su `OutputStream` al arrancar — deferred, pre-existing (compromiso de test ya reconocido explícitamente por el propio dev en el Desvío #6 de esta historia; frágil si cambia el wiring de appenders por defecto de Boot) [src/test/java/com/auth_service/auth/StructuredLoggingIntegrationTest.java:500-524]
+
 ## Dev Notes
 
 - **Esta historia es 100% configuración + tests — no toca `domain/`, `application/usecase/`, ni ningún controller existente.** No hay AC que pida nueva lógica de negocio. Si en algún punto de la implementación parece necesario crear una clase nueva en `domain/` o `application/`, es señal de estar sobre-construyendo — parar y releer el AC.
@@ -150,12 +163,16 @@ Claude Sonnet 5 (claude-sonnet-5)
 - El plan original de la historia asumía que el aislamiento por puerto bastaba para exponer Actuator sin tocar `SecurityConfig` — resultó incorrecto en la práctica con Spring Security en el classpath (ver Debug Log References, Desvíos #1-3). El fix final SÍ respeta la letra de AD-11 (`/actuator/**` nunca en `PUBLIC_ENDPOINTS`) mediante una segunda `SecurityFilterChain` dedicada.
 - Suite completa verde: 354 tests (348 previos + 6 nuevos), 0 fallas, 0 errores (`./mvnw test` con Testcontainers vía Docker).
 - Ningún archivo de `domain/`, `application/usecase/` ni ningún controller existente fue modificado, tal como anticipaban los Dev Notes.
+- **Post code-review (2026-07-23):** tras aplicar los 4 patches y la decisión 1 (guard de arranque), suite completa reverificada con Docker real y las variables `OAUTH2_SUCCESS_REDIRECT_URI`/`OAUTH2_FAILURE_REDIRECT_URI` exportadas: **355 tests, 0 fallas, 0 errores** (incluye los 3 tests nuevos de `ManagementPortSafetyCheckTest`, los 3 casos adicionales de `actuatorIsNotReachableOnTheBusinessPort` parametrizado, y el nuevo `ActuatorHealthDbDownIntegrationTest`, que confirma empíricamente que readiness responde 503 y liveness sigue `UP` con Postgres caído).
 
 ### File List
 
 **Nuevos:**
 - `src/test/java/com/auth_service/auth/ActuatorHealthIntegrationTest.java`
 - `src/test/java/com/auth_service/auth/StructuredLoggingIntegrationTest.java`
+- `src/main/java/com/auth_service/auth/config/ManagementPortSafetyCheck.java` (Review Findings — decisión 1)
+- `src/test/java/com/auth_service/auth/config/ManagementPortSafetyCheckTest.java` (Review Findings — decisión 1)
+- `src/test/java/com/auth_service/auth/ActuatorHealthDbDownIntegrationTest.java` (Review Findings — patch, rama DB caída)
 
 **Modificados:**
 - `src/main/resources/application.properties` (bloque Actuator reemplazado: puerto de management, grupos de salud; + bloque nuevo de logging estructurado/tracing; + `management.prometheus.metrics.export.enabled=true`)
